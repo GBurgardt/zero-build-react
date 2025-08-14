@@ -102,17 +102,22 @@
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="card"><p class="loading">Cargando UI...</p></div></div>
 
     <!-- Cargar la app como módulo ESM -->
     <script type="module">
-      import React from "react";
-      import { createRoot } from "react-dom/client";
-      import App from "./app.js";
-
-      createRoot(document.getElementById("root")).render(
-        React.createElement(App)
-      );
+      (async () => {
+        const rootEl = document.getElementById('root');
+        try {
+          const React = await import('https://esm.sh/react@18.2.0');
+          const { createRoot } = await import('https://esm.sh/react-dom@18.2.0/client');
+          const { default: App } = await import('./app.js');
+          createRoot(rootEl).render(React.createElement(App));
+        } catch (e) {
+          rootEl.innerHTML = `<div class="card"><div class="error">Error cargando UI: ${e.message}</div></div>`;
+          console.error(e);
+        }
+      })();
     </script>
   </body>
 </html>
