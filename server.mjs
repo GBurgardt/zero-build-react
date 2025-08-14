@@ -2,6 +2,7 @@
 // Reads OPENAI_API_KEY from .env or environment and exposes POST /chat
 
 import http from 'node:http';
+import https from 'node:https';
 import { readFileSync, existsSync } from 'node:fs';
 import { URL } from 'node:url';
 
@@ -66,17 +67,59 @@ async function handleChat(req, res) {
     const model = body.model || DEFAULT_MODEL;
 
     async function callOpenAI(selectedModel) {
-      return fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
+      if (typeof fetch === 'function') {
+        return fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: selectedModel,
+            messages,
+            temperature: typeof body.temperature === 'number' ? body.temperature : 0.7,
+          }),
+        });
+      }
+      // Fallback for very old Node without fetch
+      const payload = JSON.stringify({
         model: selectedModel,
         messages,
         temperature: typeof body.temperature === 'number' ? body.temperature : 0.7,
-      }),
+      });
+      const options = {
+        method: 'POST',
+        hostname: 'api.openai.com',
+        path: '/v1/chat/completions',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      };
+      return new Promise((resolve) => {
+        const req = https.request(options, (resp) => {
+          let data = '';
+          resp.on('data', (chunk) => (data += chunk));
+          resp.on('end', () => {
+            resolve({
+              ok: resp.statusCode >= 200 && resp.statusCode < 300,
+              status: resp.statusCode,
+              async text() { return data; },
+              async json() { return JSON.parse(data || '{}'); },
+            });
+          });
+        });
+        req.on('error', (err) => {
+          resolve({
+            ok: false,
+            status: 500,
+            async text() { return String(err?.message || err); },
+            async json() { return { error: 'network_error', detail: String(err?.message || err) }; },
+          });
+        });
+        req.write(payload);
+        req.end();
       });
     }
 

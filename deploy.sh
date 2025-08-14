@@ -73,7 +73,7 @@ ssh -i "$SSH_KEY" "$SSH_HOST" "
   # Configurar Nginx para /zero-api si no existe
   if ! sudo grep -q 'location /zero-api' /etc/nginx/conf.d/getreels.app.conf; then
     sudo cp /etc/nginx/conf.d/getreels.app.conf /etc/nginx/conf.d/getreels.app.conf.backup-zero-api || true
-    sudo sed -i '/location \/bot {/i\    # Zero-build OpenAI API\n    location /zero-api {\n        proxy_pass http://127.0.0.1:3004/;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n        rewrite ^/zero-api/?(.*)$ /$1 break;\n    }\n' /etc/nginx/conf.d/getreels.app.conf
+    sudo sed -i '/location \/bot {/i\    # Zero-build OpenAI API\n    location /zero-api {\n        proxy_pass http://127.0.0.1:3004/;\n        proxy_set_header Host \$host;\n        proxy_set_header X-Real-IP \$remote_addr;\n        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto \$scheme;\n        rewrite ^/zero-api/?(.*)$ /\$1 break;\n    }\n' /etc/nginx/conf.d/getreels.app.conf
     sudo nginx -t && sudo systemctl reload nginx
   fi
 "
