@@ -40,12 +40,12 @@ let ideasCollection;
 
 async function getDb() {
   if (!mongoClient) {
-    mongoClient = new MongoClient(MONGO_URI, { maxPoolSize: 10 });
+    mongoClient = new MongoClient(MONGO_URI, { maxPoolSize: 10, directConnection: true });
     await mongoClient.connect();
     const dbName = new URL(MONGO_URI).pathname.replace(/^\//, '') || 'zerodb';
     const db = mongoClient.db(dbName);
     ideasCollection = db.collection('ideas');
-    await ideasCollection.createIndex({ createdAt: -1 });
+    try { await ideasCollection.createIndex({ createdAt: -1 }); } catch (_) {}
   }
   return { ideas: ideasCollection };
 }
