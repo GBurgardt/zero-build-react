@@ -6,6 +6,6 @@
   "description": "Zero-build React app with minimal backend",
   "dependencies": {
     "mongodb": "^6.8.0",
-    "openai": "^4.58.1"
+    "openai": "^4.104.0"
   }
 }
