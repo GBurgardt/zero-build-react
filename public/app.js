@@ -171,10 +171,19 @@ export default function App() {
     try {
       const safeContent = typeof currentContent === 'string' ? currentContent : String(currentContent || '');
       if (!safeContent) return '';
-      const html = (mdLib.parse ? mdLib.parse(safeContent) : mdLib(safeContent));
-      const clean = typeof purifyLib?.sanitize === 'function' ? purifyLib.sanitize(html) : html;
-      return clean;
-    } catch (_) {
+      // Verificar que marked no reciba null/undefined
+      if (mdLib && typeof mdLib.parse === 'function') {
+        const html = mdLib.parse(safeContent);
+        const clean = typeof purifyLib?.sanitize === 'function' ? purifyLib.sanitize(html) : html;
+        return clean;
+      } else if (mdLib && typeof mdLib === 'function') {
+        const html = mdLib(safeContent);
+        const clean = typeof purifyLib?.sanitize === 'function' ? purifyLib.sanitize(html) : html;
+        return clean;
+      }
+      return `<pre>${safeContent.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
+    } catch (err) {
+      console.error('Error rendering markdown:', err);
       // Si el parser falla, mostramos texto plano
       const safeContent = typeof currentContent === 'string' ? currentContent : String(currentContent || '');
       return `<pre>${(safeContent || '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;

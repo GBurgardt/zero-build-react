@@ -346,7 +346,7 @@ const server = http.createServer(async (req, res) => {
   if (!ideaMatch) ideaMatch = url.pathname.match(/^\/ideas\/(\w{24})$/);
   if (req.method === 'GET' && ideaMatch) return handleIdeaStatus(req, res, ideaMatch[1]);
   // Full payload for detail view
-  const ideaFull = url.pathname.match(/^\/(?:zero-api|)\/ideas\/(\w{24})\/full$/);
+  const ideaFull = url.pathname.match(/^\/(?:zero-api\/)?ideas\/(\w{24})\/full$/);
   if (req.method === 'GET' && ideaFull) {
     try {
       const { ideas } = await getDb();

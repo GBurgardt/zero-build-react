@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Simple remote logs tailer for the Zero app
-# Usage:
-#   ./logs.sh api      # PM2 logs of zero-api (backend)
-#   ./logs.sh web      # PM2 logs of zero-web (static server)
-#   ./logs.sh nginx    # Nginx access/error logs
-#   ./logs.sh all      # Backend + Web + Nginx together
-#   ./logs.sh last 200 # Show last 200 lines (api) and exit
+# Log viewer para ver tus console.log del servidor en vivo
+#
+# Uso:
+#   ./logs.sh api [pattern]       # Muestra logs de zero-api (stdout+stderr). Opcional: filtrar por regex.
+#   ./logs.sh web                 # Logs de zero-web (pm2)
+#   ./logs.sh nginx               # Nginx access/error
+#   ./logs.sh all [pattern]       # api + web + nginx. Opcional: filtro regex que se aplica a todos.
+#   ./logs.sh last <N> [pattern]  # Últimas N líneas de zero-api, con filtro opcional, y termina.
 
 SSH_KEY="${SSH_KEY:-$HOME/.aws/german_mac.pem}"
 SSH_HOST="${SSH_HOST:-ec2-user@getreels.app}"
@@ -16,14 +17,33 @@ REMOTE_DIR="${REMOTE_DIR:-/home/ec2-user/zero-build-react}"
 MODE="${1:-api}"
 ARG2="${2:-}"
 
-ssh_base() {
-  ssh -i "$SSH_KEY" "$SSH_HOST" "$@"
+ssh_base() { ssh -i "$SSH_KEY" "$SSH_HOST" "$@"; }
+
+# Tailing crudo de PM2 (sin formateo) para que aparezcan exactamente tus console.log
+tail_api_follow() {
+  local FILTER_RE="${1:-}"
+  local CMD="tail -n 200 -F $HOME/.pm2/logs/zero-api-out.log $HOME/.pm2/logs/zero-api-error.log"
+  if [ -n "$FILTER_RE" ]; then
+    ssh_base "bash -lc '$CMD | stdbuf -oL -eL grep --line-buffered -E -- "$FILTER_RE"'"
+  else
+    ssh_base "$CMD"
+  fi
+}
+
+tail_api_last() {
+  local LINES="${1:-200}"
+  local FILTER_RE="${2:-}"
+  local CMD="tail -n $LINES $HOME/.pm2/logs/zero-api-out.log $HOME/.pm2/logs/zero-api-error.log"
+  if [ -n "$FILTER_RE" ]; then
+    ssh_base "bash -lc '$CMD | grep -E -- "$FILTER_RE"'"
+  else
+    ssh_base "$CMD"
+  fi
 }
 
 case "$MODE" in
   api)
-    # Stream PM2 logs for backend
-    ssh_base "pm2 logs zero-api"
+    tail_api_follow "$ARG2"
     ;;
   web)
     ssh_base "pm2 logs zero-web"
@@ -33,14 +53,20 @@ case "$MODE" in
     ssh_base "sudo tail -F /var/log/nginx/access.log /var/log/nginx/error.log"
     ;;
   all)
-    # Run all important logs in one SSH session, interleaved
-    # pm2 logs already prefixes lines with process name; nginx will be raw
-    ssh_base "bash -lc 'set -m; (pm2 logs zero-api &) ; (pm2 logs zero-web &) ; (sudo tail -F /var/log/nginx/access.log /var/log/nginx/error.log &) ; wait'"
+    # Interleave: api (raw PM2 files), web (pm2), nginx
+    # Filtro opcional que se aplica a todos los streams
+    FILTER="$ARG2"
+    ssh_base "bash -lc 'set -m; \
+      (tail -n 200 -F $HOME/.pm2/logs/zero-api-out.log $HOME/.pm2/logs/zero-api-error.log ${FILTER:+| stdbuf -oL -eL grep --line-buffered -E -- \"$FILTER\"} &) ; \
+      (pm2 logs zero-web ${FILTER:+| grep -E -- \"$FILTER\"} &) ; \
+      (sudo tail -F /var/log/nginx/access.log /var/log/nginx/error.log ${FILTER:+| grep -E -- \"$FILTER\"} &) ; \
+      wait'"
     ;;
   last)
-    # Show last N lines of backend logs (default 200)
+    # Últimas N líneas de backend con filtro opcional
     LINES="${ARG2:-200}"
-    ssh_base "tail -n $LINES $HOME/.pm2/logs/zero-api-out.log $HOME/.pm2/logs/zero-api-error.log"
+    FILTER="${3:-}"
+    tail_api_last "$LINES" "$FILTER"
     ;;
   *)
     echo "Unknown mode: $MODE" >&2
