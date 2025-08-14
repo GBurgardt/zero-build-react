@@ -149,7 +149,11 @@ export default function App() {
         const m = await import('https://esm.sh/marked@12');
         const d = await import('https://esm.sh/dompurify@3');
         const marked = m.marked || m.default || m;
-        const DOMPurify = d.default || d;
+        let DOMPurify = d.default || d;
+        // Asegurar instancia con método sanitize
+        if (typeof DOMPurify?.sanitize !== 'function' && typeof DOMPurify === 'function') {
+          try { DOMPurify = DOMPurify(window); } catch (_) {}
+        }
         // Config suave: saltos de línea y tipografía amigable
         if (marked?.setOptions) {
           marked.setOptions({ breaks: true, smartypants: true, mangle: false, headerIds: false });
@@ -165,8 +169,9 @@ export default function App() {
   const htmlContent = React.useMemo(() => {
     if (!mdLib || !purifyLib) return null;
     try {
-      const html = (mdLib.parse ? mdLib.parse(currentContent) : mdLib(currentContent));
-      const clean = purifyLib.sanitize(html);
+      const safeContent = typeof currentContent === 'string' ? currentContent : String(currentContent || '');
+      const html = (mdLib.parse ? mdLib.parse(safeContent) : mdLib(safeContent));
+      const clean = typeof purifyLib?.sanitize === 'function' ? purifyLib.sanitize(html) : html;
       return clean;
     } catch (_) {
       return null;
