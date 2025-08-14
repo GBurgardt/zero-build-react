@@ -472,25 +472,24 @@ hr {
 
 .home-hero {
   text-align: center;
-  margin-bottom: var(--spacing-lg);
-  margin-top: 15vh;
+  margin-bottom: 32px;
+  margin-top: 20vh;
 }
 
 .home-title {
-  font-size: 36px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  margin-bottom: 6px;
+  font-size: 32px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
   color: var(--text-primary);
-  opacity: 0.9;
 }
 
 .home-subtitle {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-tertiary);
   font-weight: 400;
-  opacity: 0.5;
-  margin-bottom: 60px;
+  opacity: 0.6;
+  margin-bottom: 48px;
 }
 
 .input-section {
@@ -504,19 +503,19 @@ hr {
 
 .input-field {
   width: 100%;
-  padding: 18px 60px 18px 22px;
+  padding: 12px 52px 12px 20px;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.4;
   font-family: var(--font-system);
-  border: 1.5px solid transparent;
-  border-radius: 28px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 22px;
   background: white;
   resize: none;
   outline: none;
-  transition: all 0.15s ease;
-  min-height: 54px;
-  max-height: 54px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  min-height: 44px;
+  max-height: 44px;
+  letter-spacing: -0.01em;
 }
 
 .input-field::placeholder {
@@ -526,25 +525,25 @@ hr {
 
 .input-field:focus {
   border-color: var(--link);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1), 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.15);
 }
 
 .submit-button {
   position: absolute;
   top: 50%;
-  right: 6px;
+  right: 4px;
   transform: translateY(-50%);
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   background: var(--link);
   color: white;
   border: none;
   border-radius: 50%;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 400;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: transform 0.1s ease, background 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -552,11 +551,10 @@ hr {
 
 .submit-button:hover:not(:disabled) {
   background: #0051d5;
-  transform: translateY(-50%) scale(1.08);
 }
 
 .submit-button:active {
-  transform: translateY(-50%) scale(0.95);
+  transform: translateY(-50%) scale(0.92);
 }
 
 .submit-button:disabled {
@@ -568,10 +566,10 @@ hr {
 .ideas-grid {
   display: none;
   gap: 0;
-  max-width: 520px;
-  margin: 80px auto 0;
+  max-width: 480px;
+  margin: 64px auto 0;
   opacity: 0;
-  animation: fadeInUp 0.6s ease 0.3s forwards;
+  animation: fadeInUp 0.4s ease 0.2s forwards;
 }
 
 .ideas-grid.has-ideas {
@@ -592,30 +590,30 @@ hr {
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(12px);
   }
   to {
-    opacity: 0.8;
+    opacity: 1;
     transform: translateY(0);
   }
 }
 
 .idea-card {
-  padding: 14px 0;
+  padding: 16px 0;
   background: transparent;
   border-radius: 0;
   border: none;
-  border-bottom: 0.5px solid rgba(0, 0, 0, 0.04);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.05);
   text-decoration: none;
   color: var(--text-primary);
-  transition: all 0.15s ease;
+  transition: opacity 0.15s ease, padding 0.15s ease;
   cursor: pointer;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 .idea-card:hover {
   opacity: 1;
-  border-bottom-color: var(--link);
+  padding-left: 8px;
 }
 
 .idea-preview {
