@@ -472,25 +472,28 @@ hr {
 
 .home-hero {
   text-align: center;
-  margin-bottom: var(--spacing-xxl);
+  margin-bottom: var(--spacing-lg);
+  margin-top: 15vh;
 }
 
 .home-title {
-  font-size: 56px;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-  margin-bottom: var(--spacing-sm);
+  font-size: 42px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  margin-bottom: var(--spacing-xs);
+  color: var(--text-primary);
 }
 
 .home-subtitle {
-  font-size: 20px;
-  color: var(--text-secondary);
+  font-size: 17px;
+  color: var(--text-tertiary);
   font-weight: 400;
+  opacity: 0.8;
 }
 
 .input-section {
-  max-width: var(--content-width);
-  margin: 0 auto var(--spacing-xxl);
+  max-width: 520px;
+  margin: 0 auto var(--spacing-xl);
 }
 
 .input-container {
@@ -499,84 +502,116 @@ hr {
 
 .input-field {
   width: 100%;
-  padding: var(--spacing-md);
-  font-size: 18px;
+  padding: 20px 24px;
+  font-size: 16px;
+  line-height: 1.5;
   font-family: var(--font-system);
-  border: 1px solid var(--divider);
-  border-radius: 12px;
-  background: white;
+  border: none;
+  border-radius: 24px;
+  background: rgba(0, 0, 0, 0.04);
   resize: none;
   outline: none;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  min-height: 56px;
+  max-height: 120px;
+}
+
+.input-field::placeholder {
+  color: rgba(0, 0, 0, 0.3);
 }
 
 .input-field:focus {
-  border-color: var(--link);
-  box-shadow: 0 0 0 3px var(--selection);
+  background: white;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 8px 32px rgba(0, 0, 0, 0.08);
+  transform: scale(1.02);
 }
 
 .submit-button {
   position: absolute;
-  bottom: var(--spacing-sm);
-  right: var(--spacing-sm);
-  padding: var(--spacing-xs) var(--spacing-md);
+  bottom: 8px;
+  right: 8px;
+  padding: 10px 20px;
   background: var(--text-primary);
   color: white;
   border: none;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 600;
+  border-radius: 18px;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  opacity: 0;
+}
+
+.input-field:focus ~ .submit-button,
+.submit-button:hover {
+  opacity: 1;
 }
 
 .submit-button:hover:not(:disabled) {
   background: var(--link);
-  transform: translateY(-1px);
+  transform: scale(1.05);
 }
 
 .submit-button:disabled {
-  opacity: 0.5;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
 /* Ideas list */
 .ideas-grid {
   display: grid;
-  gap: var(--spacing-md);
-  max-width: var(--content-width);
+  gap: 2px;
+  max-width: 600px;
   margin: 0 auto;
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+.ideas-grid:hover {
+  opacity: 1;
+}
+
+.ideas-grid h2 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  margin-bottom: var(--spacing-md);
+  text-align: center;
+  opacity: 0.6;
 }
 
 .idea-card {
-  padding: var(--spacing-md);
-  background: white;
-  border-radius: 12px;
-  border: 1px solid var(--divider);
+  padding: 16px 20px;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
   text-decoration: none;
   color: var(--text-primary);
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.32, 0.72, 0, 1);
   cursor: pointer;
 }
 
 .idea-card:hover {
-  border-color: var(--link);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  transform: translateY(-2px);
+  background: rgba(0, 0, 0, 0.02);
+  padding-left: 28px;
+  border-bottom-color: rgba(0, 0, 0, 0.1);
 }
 
 .idea-preview {
-  font-size: 16px;
-  font-weight: 500;
-  margin-bottom: var(--spacing-xs);
+  font-size: 14px;
+  font-weight: 400;
+  margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-primary);
 }
 
 .idea-meta {
-  font-size: 14px;
-  color: var(--text-secondary);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  opacity: 0.6;
 }
 
 /* Responsive */
