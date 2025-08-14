@@ -146,45 +146,71 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const m = await import('https://esm.sh/marked@12');
+        const m = await import('https://esm.sh/marked@13');
         const d = await import('https://esm.sh/dompurify@3');
+        
+        // Extraer marked correctamente
         const marked = m.marked || m.default || m;
+        
+        // Extraer DOMPurify y crear instancia
         let DOMPurify = d.default || d;
-        // Asegurar instancia con método sanitize
-        if (typeof DOMPurify?.sanitize !== 'function' && typeof DOMPurify === 'function') {
-          try { DOMPurify = DOMPurify(window); } catch (_) {}
+        if (typeof DOMPurify === 'function') {
+          DOMPurify = DOMPurify(window);
         }
-        // Config suave: saltos de línea y tipografía amigable
-        if (marked?.setOptions) {
-          marked.setOptions({ breaks: true, smartypants: true, mangle: false, headerIds: false });
+        
+        // Configurar marked solo si es un objeto con setOptions
+        if (marked && typeof marked === 'object' && marked.setOptions) {
+          marked.setOptions({ 
+            breaks: true, 
+            gfm: true,
+            mangle: false, 
+            headerIds: false 
+          });
         }
-        setMdLib(marked);
-        setPurifyLib(DOMPurify);
-      } catch (_) {
-        // fallback silencioso, se mostrará como texto plano
+        
+        // Guardar las librerías solo si son válidas
+        if (marked) {
+          setMdLib(() => marked);
+        }
+        if (DOMPurify && typeof DOMPurify.sanitize === 'function') {
+          setPurifyLib(() => DOMPurify);
+        }
+      } catch (err) {
+        console.error('Error loading markdown libraries:', err);
       }
     })();
   }, []);
 
   const htmlContent = React.useMemo(() => {
-    if (!mdLib || !purifyLib) return null;
+    if (!mdLib || !purifyLib || !currentContent) return null;
+    
     try {
       const safeContent = typeof currentContent === 'string' ? currentContent : String(currentContent || '');
-      if (!safeContent) return '';
-      // Verificar que marked no reciba null/undefined
-      if (mdLib && typeof mdLib.parse === 'function') {
-        const html = mdLib.parse(safeContent);
-        const clean = typeof purifyLib?.sanitize === 'function' ? purifyLib.sanitize(html) : html;
-        return clean;
-      } else if (mdLib && typeof mdLib === 'function') {
-        const html = mdLib(safeContent);
-        const clean = typeof purifyLib?.sanitize === 'function' ? purifyLib.sanitize(html) : html;
-        return clean;
+      if (!safeContent || safeContent.trim() === '') return '';
+      
+      let html = '';
+      
+      // Intentar usar marked.parse si está disponible
+      if (mdLib.parse && typeof mdLib.parse === 'function') {
+        html = mdLib.parse(safeContent);
+      } 
+      // Fallback a marked como función
+      else if (typeof mdLib === 'function') {
+        html = mdLib(safeContent);
       }
-      return `<pre>${safeContent.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
+      // Si no hay método de parseo disponible, usar texto plano
+      else {
+        return `<pre>${safeContent.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
+      }
+      
+      // Sanitizar el HTML si es posible
+      if (purifyLib && typeof purifyLib.sanitize === 'function') {
+        return purifyLib.sanitize(html);
+      }
+      
+      return html;
     } catch (err) {
       console.error('Error rendering markdown:', err);
-      // Si el parser falla, mostramos texto plano
       const safeContent = typeof currentContent === 'string' ? currentContent : String(currentContent || '');
       return `<pre>${(safeContent || '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
     }
