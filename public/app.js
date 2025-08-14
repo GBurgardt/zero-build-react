@@ -469,7 +469,6 @@ export default function App() {
     ideas.length > 0 && React.createElement(
       "div",
       { className: "ideas-grid has-ideas" },
-      React.createElement("h2", { style: { marginBottom: 24 } }, "Ideas recientes"),
       ...ideas.map((item) =>
         React.createElement(
           "a",

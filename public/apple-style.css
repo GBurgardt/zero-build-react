@@ -12,7 +12,7 @@
   --text-secondary: #86868b;
   --text-tertiary: #515154;
   --background: #FAFAFA;
-  --link: #06c;
+  --link: #007AFF;
   --link-hover: #0051d5;
   --selection: rgba(0, 122, 255, 0.15);
   --quote-border: rgba(0, 122, 255, 0.2);
@@ -577,14 +577,7 @@ hr {
 }
 
 .ideas-grid h2 {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-tertiary);
-  margin-bottom: 20px;
-  text-align: center;
-  opacity: 0.4;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  display: none;
 }
 
 @keyframes fadeInUp {
@@ -629,7 +622,8 @@ hr {
 .idea-meta {
   font-size: 11px;
   color: var(--text-tertiary);
-  opacity: 0.6;
+  opacity: 0.5;
+  letter-spacing: -0.01em;
 }
 
 /* Responsive */
@@ -674,16 +668,14 @@ hr {
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
 .fade-in {
-  animation: fadeIn 0.4s ease;
+  animation: fadeIn 0.3s ease;
 }
 
 /* Markdown content specific */
