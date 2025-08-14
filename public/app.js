@@ -44,6 +44,19 @@ export default function App() {
     }
   };
 
+  // Auto-grow textarea
+  useEffect(() => {
+    const el = document.querySelector('textarea.input');
+    if (!el) return;
+    const handler = () => {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+    };
+    handler();
+    el.addEventListener('input', handler);
+    return () => el.removeEventListener('input', handler);
+  }, []);
+
   // --- Helpers de UI ---
   const createStatBar = (label, value) => {
     const maxStat = 255;
@@ -113,8 +126,12 @@ export default function App() {
           }),
           React.createElement(
             "button",
-            { onClick: sendMessage, disabled: sending || !input.trim(), className: "send" },
-            sending ? "…" : "➤"
+            { onClick: sendMessage, disabled: sending || !input.trim(), className: "send", title: "Enviar" },
+            React.createElement(
+              "svg",
+              { viewBox: "0 0 24 24", fill: "none", xmlns: "http://www.w3.org/2000/svg" },
+              React.createElement("path", { d: "M3 11.5L20 3L11.5 20L10 14L3 11.5Z", fill: "currentColor" })
+            )
           )
         ),
         aiError ? React.createElement("div", { className: "error", style: { marginTop: 10 } }, `Error: ${aiError}`) : null
