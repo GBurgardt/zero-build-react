@@ -459,7 +459,7 @@ export default function App() {
             className: "submit-button", 
             title: "Enviar (Enter)" 
           },
-          sending ? "Enviando…" : "Enviar"
+          sending ? "..." : "→"
         )
       ),
       errorMsg ? React.createElement("div", { className: "error-elegant" }, errorMsg) : null
@@ -468,7 +468,7 @@ export default function App() {
     // Ideas list
     ideas.length > 0 && React.createElement(
       "div",
-      { className: "ideas-grid" },
+      { className: "ideas-grid has-ideas" },
       React.createElement("h2", { style: { marginBottom: 24 } }, "Ideas recientes"),
       ...ideas.map((item) =>
         React.createElement(
