@@ -27,26 +27,22 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // Toggle del índice flotante
-  const [showToc, setShowToc] = useState(false);
+  // Toggle del sidebar derecho
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e) => {
-      // ESC para cerrar el índice
-      if (e.key === 'Escape' && showToc) {
-        setShowToc(false);
-      }
-      // CMD+K o CTRL+K para abrir el índice
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      // CMD+B o CTRL+B para toggle sidebar
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
         e.preventDefault();
-        setShowToc(!showToc);
+        setSidebarCollapsed(!sidebarCollapsed);
       }
     };
     
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showToc]);
+  }, [sidebarCollapsed]);
   
   // Detail view state
   const [detail, setDetail] = useState({ loading: false, status: "", result: "" });
@@ -346,8 +342,11 @@ export default function App() {
   // Views
   if (route.mode === "detail") {
     return React.createElement(
-      "div",
-      { className: "reading-container fade-in" },
+      React.Fragment,
+      null,
+      React.createElement(
+        "div",
+        { className: `reading-container fade-in ${toc.length > 0 ? 'with-sidebar' : ''}` },
       // Back link
       React.createElement(
         "a",
@@ -365,59 +364,6 @@ export default function App() {
       // Main title
       React.createElement("h1", null, mainTitle || "Idea"),
       React.createElement("p", { className: "meta" }, `ID: ${route.ideaId}`),
-      // Navigation button (floating)
-      React.createElement(
-        "div",
-        { className: "nav-minimal" },
-        React.createElement(
-          "div",
-          { 
-            className: "nav-button",
-            onClick: () => setShowToc(!showToc),
-            title: "Índice (⌘K)"
-          },
-          "☰"
-        )
-      ),
-      // Table of contents overlay
-      React.createElement(
-        "div",
-        { 
-          className: `toc-overlay ${showToc ? 'visible' : ''}`,
-          onClick: (e) => {
-            if (e.target === e.currentTarget) setShowToc(false);
-          }
-        },
-        React.createElement(
-          "div",
-          { className: "toc-content" },
-          React.createElement("h2", { className: "toc-title" }, "Contenido"),
-          React.createElement(
-            "ul",
-            { className: "toc-list" },
-            ...toc.map((item) => (
-              React.createElement(
-                "li",
-                { key: item.id, className: "toc-item" },
-                React.createElement(
-                  "a",
-                  {
-                    href: `#`,
-                    className: `toc-link ${route.section === item.id ? 'active' : ''}`,
-                    onClick: (e) => {
-                      e.preventDefault();
-                      window.history.pushState(null, '', `/zero/idea/${route.ideaId}/${encodeURIComponent(item.id)}`);
-                      setRoute({ mode: "detail", ideaId: route.ideaId, section: item.id });
-                      setShowToc(false);
-                    }
-                  },
-                  item.title
-                )
-              )
-            ))
-          )
-        )
-      ),
       // Main content
       React.createElement(
         "div",
@@ -432,7 +378,50 @@ export default function App() {
                 (currentContent || "Sin contenido aún.")
               )
       )
-    );
+    ),
+    // Sidebar derecho con subtítulos
+    toc.length > 0 && React.createElement(
+      "div",
+      { className: `sidebar-right ${sidebarCollapsed ? 'collapsed' : ''}` },
+      React.createElement(
+        "div",
+        { 
+          className: "sidebar-toggle",
+          onClick: () => setSidebarCollapsed(!sidebarCollapsed),
+          title: "Toggle sidebar (⌘B)"
+        },
+        sidebarCollapsed ? "‹" : "›"
+      ),
+      React.createElement(
+        "nav",
+        { className: "sidebar-nav" },
+        React.createElement("div", { className: "sidebar-title" }, "En esta página"),
+        React.createElement(
+          "ul",
+          { className: "sidebar-items" },
+          ...toc.map((item) => (
+            React.createElement(
+              "li",
+              { key: item.id, className: "sidebar-item" },
+              React.createElement(
+                "a",
+                {
+                  href: `#`,
+                  className: `sidebar-link ${route.section === item.id ? 'active' : ''}`,
+                  onClick: (e) => {
+                    e.preventDefault();
+                    window.history.pushState(null, '', `/zero/idea/${route.ideaId}/${encodeURIComponent(item.id)}`);
+                    setRoute({ mode: "detail", ideaId: route.ideaId, section: item.id });
+                  }
+                },
+                item.title
+              )
+            )
+          ))
+        )
+      )
+    )
+  );
   }
 
   // Home
