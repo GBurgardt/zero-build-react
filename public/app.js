@@ -395,7 +395,7 @@ export default function App() {
       React.createElement(
         "nav",
         { className: "sidebar-nav" },
-        React.createElement("div", { className: "sidebar-title" }, "En esta página"),
+        React.createElement("div", { className: "sidebar-title" }, "Contenido"),
         React.createElement(
           "ul",
           { className: "sidebar-items" },
