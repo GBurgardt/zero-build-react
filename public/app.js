@@ -10,13 +10,14 @@ export default function App() {
   // Lista de ideas recientes (desde backend)
   const [ideas, setIdeas] = useState([]); // {id, text, status, createdAt}
 
-  // Routing mínimo: home vs detail (/zero/idea/:id)
-  const [route, setRoute] = useState({ mode: "home", ideaId: null });
+  // Routing mínimo: home vs detail (/zero/idea/:id) y sección opcional (/zero/idea/:id/:section)
+  const [route, setRoute] = useState({ mode: "home", ideaId: null, section: null });
 
   const evaluateRoute = () => {
-    const m = window.location.pathname.match(/^\/zero\/idea\/([0-9a-fA-F]{24})$/);
-    if (m) setRoute({ mode: "detail", ideaId: m[1] });
-    else setRoute({ mode: "home", ideaId: null });
+    // Soporta sección opcional como último segmento
+    const m = window.location.pathname.match(/^\/zero\/idea\/([0-9a-fA-F]{24})(?:\/([^\/]+))?$/);
+    if (m) setRoute({ mode: "detail", ideaId: m[1], section: m[2] ? decodeURIComponent(m[2]) : null });
+    else setRoute({ mode: "home", ideaId: null, section: null });
   };
 
   useEffect(() => {
@@ -28,22 +29,102 @@ export default function App() {
 
   // Detail view state
   const [detail, setDetail] = useState({ loading: false, status: "", result: "" });
+  // Índice de secciones [{id, title}]
+  const [toc, setToc] = useState([]);
+  // Mapa id->contenido cuando el endpoint full esté disponible
+  const [sectionMap, setSectionMap] = useState({});
+
+  function slugify(str) {
+    return (str || 'seccion')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .slice(0, 64);
+  }
+
   const loadDetail = async (id) => {
     try {
       setDetail((d) => ({ ...d, loading: true }));
+      // Intentar endpoint enriquecido primero
+      let data;
+      let ok = false;
+      try {
+        const rFull = await fetch(`/zero-api/ideas/${id}/full`);
+        data = await rFull.json();
+        ok = rFull.ok;
+        if (ok) {
+          setDetail({ loading: false, status: data.status || "", result: data.resume_raw || data.result || "" });
+          const nextToc = Array.isArray(data.toc) ? data.toc : [];
+          setToc(nextToc);
+          const nextMap = {};
+          if (Array.isArray(data.sections)) {
+            for (const s of data.sections) {
+              if (s?.id) nextMap[s.id] = s.content || '';
+            }
+          }
+          setSectionMap(nextMap);
+          if (data.status === "processing") pollStatus(id);
+          return;
+        }
+      } catch (_) {}
+
+      // Fallback al endpoint simple
       const r = await fetch(`/zero-api/ideas/${id}`);
-      const data = await r.json();
+      data = await r.json();
       if (!r.ok) throw new Error(data.detail || data.error || "Error obteniendo idea");
       setDetail({ loading: false, status: data.status || "", result: data.result || "" });
+      if (data.result) {
+        const titles = [...data.result.matchAll(/^## (.+)$/gm)].map(m => m[1]);
+        const nextToc = titles.map(t => ({ id: slugify(t), title: t }));
+        setToc(nextToc);
+        // Construir mapa id->contenido
+        const lines = data.result.split('\n');
+        const nextMap = {};
+        for (let i = 0; i < nextToc.length; i++) {
+          const title = nextToc[i].title;
+          const idSlug = nextToc[i].id;
+          const start = lines.findIndex(l => l.startsWith(`## ${title}`));
+          if (start !== -1) {
+            let buf = '';
+            for (let j = start + 1; j < lines.length; j++) {
+              if (lines[j].startsWith('## ')) break;
+              buf += lines[j] + '\n';
+            }
+            nextMap[idSlug] = buf;
+          }
+        }
+        setSectionMap(nextMap);
+      }
       if (data.status === "processing") pollStatus(id);
     } catch (e) {
       setDetail({ loading: false, status: "error", result: String(e?.message || e) });
+      setToc([]);
+      setSectionMap({});
     }
   };
 
   useEffect(() => {
     if (route.mode === "detail" && route.ideaId) loadDetail(route.ideaId);
   }, [route.mode, route.ideaId]);
+
+  // Contenido actual según sección
+  const currentContent = React.useMemo(() => {
+    if (!detail.result) return "";
+    if (!route.section) return detail.result;
+    // Buscar por id de sección en el mapa
+    if (sectionMap[route.section]) return sectionMap[route.section];
+    return "Sección no encontrada";
+  }, [detail.result, route.section, sectionMap]);
+
+  // Si no hay sección seleccionada pero tenemos índice, seleccionar la primera
+  useEffect(() => {
+    if (route.mode === 'detail' && route.ideaId && !route.section && toc.length > 0) {
+      const first = toc[0];
+      window.history.replaceState(null, '', `/zero/idea/${route.ideaId}/${encodeURIComponent(first.id)}`);
+      setRoute({ mode: 'detail', ideaId: route.ideaId, section: first.id });
+    }
+  }, [route.mode, route.ideaId, route.section, toc]);
 
   const loadIdeas = async () => {
     try {
@@ -168,13 +249,55 @@ export default function App() {
         detail.loading
           ? React.createElement("p", { className: "loading" }, "Cargando…")
           : React.createElement(
-              "pre",
-              { style: { whiteSpace: "pre-wrap", margin: 0 } },
-              (detail.result || "Sin contenido aún.")
+              "div",
+              { style: { display: 'flex', gap: 20 } },
+              // Sidebar izquierda: índice de secciones
+              React.createElement(
+                "div",
+                { style: { flex: '0 0 280px' } },
+                React.createElement("h3", null, "Explicación detallada"),
+                ...toc.map((item) => (
+                  React.createElement(
+                    "div",
+                    { key: item.id, style: { marginBottom: 10 } },
+                    React.createElement(
+                      "a",
+                      {
+                        href: `#/zero/idea/${route.ideaId}/${encodeURIComponent(item.id)}`,
+                        onClick: (e) => {
+                          e.preventDefault();
+                          window.history.pushState(null, '', `/zero/idea/${route.ideaId}/${encodeURIComponent(item.id)}`);
+                          setRoute({ mode: "detail", ideaId: route.ideaId, section: item.id });
+                        },
+                        style: {
+                          textDecoration: 'none',
+                          color: route.section === item.id ? '#0a84ff' : '#333',
+                          fontWeight: route.section === item.id ? 'bold' : 'normal',
+                          display: 'block',
+                          padding: '8px 10px',
+                          borderRadius: 10,
+                          background: route.section === item.id ? 'rgba(10,132,255,0.08)' : 'transparent'
+                        }
+                      },
+                      item.title
+                    )
+                  )
+                ))
+              ),
+              // Columna derecha: contenido
+              React.createElement(
+                "div",
+                { style: { flex: 1 } },
+                React.createElement(
+                  "pre",
+                  { style: { whiteSpace: "pre-wrap", margin: 0 } },
+                  (currentContent || "Sin contenido aún.")
+                )
+              )
             ),
         React.createElement("div", { style: { marginTop: 16, display: 'flex', gap: 12 } },
           React.createElement("a", { href: "/zero", className: "chip", title: "Volver" }, "← Volver a Recientes"),
-          React.createElement("a", { href: `https://getreels.app/zero/idea/${route.ideaId}`, className: "chip", title: "Link permanente" }, "Copiar enlace")
+          React.createElement("a", { href: `https://getreels.app/zero/idea/${route.ideaId}${route.section ? `/${route.section}` : ''}`, className: "chip", title: "Link permanente" }, "Copiar enlace")
         )
       )
     );
