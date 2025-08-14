@@ -27,6 +27,27 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  // Toggle del índice flotante
+  const [showToc, setShowToc] = useState(false);
+  
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // ESC para cerrar el índice
+      if (e.key === 'Escape' && showToc) {
+        setShowToc(false);
+      }
+      // CMD+K o CTRL+K para abrir el índice
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowToc(!showToc);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [showToc]);
+  
   // Detail view state
   const [detail, setDetail] = useState({ loading: false, status: "", result: "" });
   // Índice de secciones [{id, title}]
@@ -326,73 +347,90 @@ export default function App() {
   if (route.mode === "detail") {
     return React.createElement(
       "div",
-      { className: "container" },
+      { className: "reading-container fade-in" },
+      // Back link
       React.createElement(
-        "div",
-        { className: "headline" },
-        React.createElement("h1", null, mainTitle || "Idea"),
-        React.createElement("p", null, `ID: ${route.ideaId}`)
+        "a",
+        { 
+          href: "/zero", 
+          className: "back-link",
+          onClick: (e) => {
+            e.preventDefault();
+            window.history.pushState(null, '', '/zero');
+            setRoute({ mode: 'home', ideaId: null, section: null });
+          }
+        },
+        "← Volver"
       ),
+      // Main title
+      React.createElement("h1", null, mainTitle || "Idea"),
+      React.createElement("p", { className: "meta" }, `ID: ${route.ideaId}`),
+      // Navigation button (floating)
       React.createElement(
         "div",
-        { className: "card" },
-        React.createElement("div", { className: "section-title" }, detail.status === 'processing' ? 'Procesando…' : detail.status === 'done' ? 'Resultado' : (detail.status || 'Estado')),
-        React.createElement("div", { className: "divider" }),
-        detail.loading
-          ? React.createElement("p", { className: "loading" }, "Cargando…")
-          : React.createElement(
-              "div",
-              { style: { display: 'flex', gap: 20 } },
-              // Sidebar izquierda: índice de secciones
-              React.createElement(
-                "div",
-                { style: { flex: '0 0 280px' } },
-                React.createElement("h3", null, "Explicación detallada"),
-                ...toc.map((item) => (
-                  React.createElement(
-                    "div",
-                    { key: item.id, style: { marginBottom: 10 } },
-                    React.createElement(
-                      "a",
-                      {
-                        href: `#/zero/idea/${route.ideaId}/${encodeURIComponent(item.id)}`,
-                        onClick: (e) => {
-                          e.preventDefault();
-                          window.history.pushState(null, '', `/zero/idea/${route.ideaId}/${encodeURIComponent(item.id)}`);
-                          setRoute({ mode: "detail", ideaId: route.ideaId, section: item.id });
-                        },
-                        style: {
-                          textDecoration: 'none',
-                          color: route.section === item.id ? '#0a84ff' : '#333',
-                          fontWeight: route.section === item.id ? 'bold' : 'normal',
-                          display: 'block',
-                          padding: '8px 10px',
-                          borderRadius: 10,
-                          background: route.section === item.id ? 'rgba(10,132,255,0.08)' : 'transparent'
-                        }
-                      },
-                      item.title
-                    )
-                  )
-                ))
-              ),
-              // Columna derecha: contenido en Markdown
-              React.createElement(
-                "div",
-                { style: { flex: 1 } },
-                htmlContent
-                  ? React.createElement("div", { className: "md", dangerouslySetInnerHTML: { __html: htmlContent } })
-                  : React.createElement(
-                      "pre",
-                      { style: { whiteSpace: "pre-wrap", margin: 0 } },
-                      (currentContent || "Sin contenido aún.")
-                    )
-              )
-            ),
-        React.createElement("div", { style: { marginTop: 16, display: 'flex', gap: 12 } },
-          React.createElement("a", { href: "/zero", className: "chip", title: "Volver" }, "← Volver a Recientes"),
-          React.createElement("a", { href: `https://getreels.app/zero/idea/${route.ideaId}${route.section ? `/${route.section}` : ''}`, className: "chip", title: "Link permanente" }, "Copiar enlace")
+        { className: "nav-minimal" },
+        React.createElement(
+          "div",
+          { 
+            className: "nav-button",
+            onClick: () => setShowToc(!showToc),
+            title: "Índice (⌘K)"
+          },
+          "☰"
         )
+      ),
+      // Table of contents overlay
+      React.createElement(
+        "div",
+        { 
+          className: `toc-overlay ${showToc ? 'visible' : ''}`,
+          onClick: (e) => {
+            if (e.target === e.currentTarget) setShowToc(false);
+          }
+        },
+        React.createElement(
+          "div",
+          { className: "toc-content" },
+          React.createElement("h2", { className: "toc-title" }, "Contenido"),
+          React.createElement(
+            "ul",
+            { className: "toc-list" },
+            ...toc.map((item) => (
+              React.createElement(
+                "li",
+                { key: item.id, className: "toc-item" },
+                React.createElement(
+                  "a",
+                  {
+                    href: `#`,
+                    className: `toc-link ${route.section === item.id ? 'active' : ''}`,
+                    onClick: (e) => {
+                      e.preventDefault();
+                      window.history.pushState(null, '', `/zero/idea/${route.ideaId}/${encodeURIComponent(item.id)}`);
+                      setRoute({ mode: "detail", ideaId: route.ideaId, section: item.id });
+                      setShowToc(false);
+                    }
+                  },
+                  item.title
+                )
+              )
+            ))
+          )
+        )
+      ),
+      // Main content
+      React.createElement(
+        "div",
+        { className: "content-section" },
+        detail.loading
+          ? React.createElement("p", { className: "loading-elegant" }, "Cargando…")
+          : htmlContent
+            ? React.createElement("div", { className: "md", dangerouslySetInnerHTML: { __html: htmlContent } })
+            : React.createElement(
+                "pre",
+                { style: { whiteSpace: "pre-wrap", margin: 0 } },
+                (currentContent || "Sin contenido aún.")
+              )
       )
     );
   }
@@ -400,71 +438,73 @@ export default function App() {
   // Home
   return React.createElement(
     "div",
-    { className: "container" },
-    // Headline
+    { className: "home-container fade-in" },
+    // Hero section
     React.createElement(
       "div",
-      { className: "headline" },
-      React.createElement("h1", null, "Research Lab"),
-      React.createElement("p", null, "Procesá y analizá ideas para convertirlas en conocimiento")
+      { className: "home-hero" },
+      React.createElement("h1", { className: "home-title" }, "Research Lab"),
+      React.createElement("p", { className: "home-subtitle" }, "Procesá y analizá ideas para convertirlas en conocimiento")
     ),
 
-    // Two column layout
+    // Input section
     React.createElement(
       "div",
-      { className: "two-col" },
-      // Left column: input principal
+      { className: "input-section" },
       React.createElement(
         "div",
-        { className: "card" },
-        React.createElement("div", { className: "section-title" }, "Tu texto"),
-        React.createElement("div", { className: "divider" }),
+        { className: "input-container" },
+        React.createElement("textarea", {
+          value: input,
+          onChange: (e) => setInput(e.target.value),
+          onKeyDown,
+          rows: 4,
+          placeholder: "Pegá un texto o escribí tu idea aquí...",
+          className: "input-field"
+        }),
         React.createElement(
-          "div",
-          { className: "input-bar", style: { marginTop: 16 } },
-          React.createElement("textarea", {
-            value: input,
-            onChange: (e) => setInput(e.target.value),
-            onKeyDown,
-            rows: 3,
-            placeholder: "Pegá un texto o escribí acá y presioná Enter...",
-            className: "input"
-          }),
-          React.createElement(
-            "button",
-            { onClick: onSubmit, disabled: sending || !input.trim(), className: "send", title: "Enviar" },
-            React.createElement(
-              "svg",
-              { viewBox: "0 0 24 24", fill: "none", xmlns: "http://www.w3.org/2000/svg" },
-              React.createElement("path", { d: "M3 11.5L20 3L11.5 20L10 14L3 11.5Z", fill: "currentColor" })
-            )
-          )
-        ),
-        errorMsg ? React.createElement("div", { className: "error", style: { marginTop: 10 } }, `Error: ${errorMsg}`) : null
+          "button",
+          { 
+            onClick: onSubmit, 
+            disabled: sending || !input.trim(), 
+            className: "submit-button", 
+            title: "Enviar (Enter)" 
+          },
+          sending ? "Enviando…" : "Enviar"
+        )
       ),
+      errorMsg ? React.createElement("div", { className: "error-elegant" }, errorMsg) : null
+    ),
 
-      // Right column: recientes
-      React.createElement(
-        "div",
-        { className: "card" },
-        React.createElement("div", { className: "section-title" }, "Recientes"),
-        React.createElement("div", { className: "divider" }),
+    // Ideas list
+    ideas.length > 0 && React.createElement(
+      "div",
+      { className: "ideas-grid" },
+      React.createElement("h2", { style: { marginBottom: 24 } }, "Ideas recientes"),
+      ...ideas.map((item) =>
         React.createElement(
-          "div",
-          { className: "list" },
-          ...ideas.map((item, idx) =>
-            React.createElement(
-              "div",
-              { key: idx, className: "list-item" },
-              React.createElement(
-                "div",
-                null,
-                React.createElement("h4", null, item.text.length > 80 ? item.text.slice(0, 80) + "…" : item.text),
-                React.createElement("p", null, item.status === 'processing' ? 'Procesando…' : item.status === 'done' ? 'Completado' : (item.status || '')),
-                React.createElement("p", null, new Date(item.createdAt).toLocaleString())
-              ),
-              React.createElement("a", { className: "chevron", href: `/zero/idea/${item.id}`, title: "Abrir" }, "›")
-            )
+          "a",
+          { 
+            key: item.id,
+            href: `/zero/idea/${item.id}`,
+            className: "idea-card",
+            onClick: (e) => {
+              e.preventDefault();
+              window.history.pushState(null, '', `/zero/idea/${item.id}`);
+              setRoute({ mode: "detail", ideaId: item.id, section: null });
+            }
+          },
+          React.createElement(
+            "div",
+            { className: "idea-preview" },
+            item.text.length > 80 ? item.text.slice(0, 80) + "…" : item.text
+          ),
+          React.createElement(
+            "div",
+            { className: "idea-meta" },
+            item.status === 'processing' ? 'Procesando…' : item.status === 'done' ? 'Completado' : (item.status || ''),
+            " • ",
+            new Date(item.createdAt).toLocaleDateString()
           )
         )
       )
