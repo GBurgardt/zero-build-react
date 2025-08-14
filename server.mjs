@@ -338,7 +338,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   const url = new URL(req.url, `http://${req.headers.host}`);
-  if (req.method === 'GET' && url.pathname === '/zero-api/ping') {
+  if (req.method === 'GET' && (url.pathname === '/zero-api/ping' || url.pathname === '/ping')) {
     console.log('[zero-api] PING', new Date().toISOString());
     return json(res, 200, { ok: true, t: Date.now() });
   }
