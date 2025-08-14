@@ -10,6 +10,41 @@ export default function App() {
   // Lista de ideas recientes (desde backend)
   const [ideas, setIdeas] = useState([]); // {id, text, status, createdAt}
 
+  // Routing mínimo: home vs detail (/zero/idea/:id)
+  const [route, setRoute] = useState({ mode: "home", ideaId: null });
+
+  const evaluateRoute = () => {
+    const m = window.location.pathname.match(/^\/zero\/idea\/([0-9a-fA-F]{24})$/);
+    if (m) setRoute({ mode: "detail", ideaId: m[1] });
+    else setRoute({ mode: "home", ideaId: null });
+  };
+
+  useEffect(() => {
+    evaluateRoute();
+    const onPop = () => evaluateRoute();
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // Detail view state
+  const [detail, setDetail] = useState({ loading: false, status: "", result: "" });
+  const loadDetail = async (id) => {
+    try {
+      setDetail((d) => ({ ...d, loading: true }));
+      const r = await fetch(`/zero-api/ideas/${id}`);
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || data.error || "Error obteniendo idea");
+      setDetail({ loading: false, status: data.status || "", result: data.result || "" });
+      if (data.status === "processing") pollStatus(id);
+    } catch (e) {
+      setDetail({ loading: false, status: "error", result: String(e?.message || e) });
+    }
+  };
+
+  useEffect(() => {
+    if (route.mode === "detail" && route.ideaId) loadDetail(route.ideaId);
+  }, [route.mode, route.ideaId]);
+
   const loadIdeas = async () => {
     try {
       const r = await fetch("/zero-api/ideas");
@@ -114,6 +149,38 @@ export default function App() {
     );
   };
 
+  // Views
+  if (route.mode === "detail") {
+    return React.createElement(
+      "div",
+      { className: "container" },
+      React.createElement(
+        "div",
+        { className: "headline" },
+        React.createElement("h1", null, "Idea"),
+        React.createElement("p", null, `ID: ${route.ideaId}`)
+      ),
+      React.createElement(
+        "div",
+        { className: "card" },
+        React.createElement("div", { className: "section-title" }, detail.status === 'processing' ? 'Procesando…' : detail.status === 'done' ? 'Resultado' : (detail.status || 'Estado')),
+        React.createElement("div", { className: "divider" }),
+        detail.loading
+          ? React.createElement("p", { className: "loading" }, "Cargando…")
+          : React.createElement(
+              "pre",
+              { style: { whiteSpace: "pre-wrap", margin: 0 } },
+              (detail.result || "Sin contenido aún.")
+            ),
+        React.createElement("div", { style: { marginTop: 16, display: 'flex', gap: 12 } },
+          React.createElement("a", { href: "/zero", className: "chip", title: "Volver" }, "← Volver a Recientes"),
+          React.createElement("a", { href: `https://getreels.app/zero/idea/${route.ideaId}`, className: "chip", title: "Link permanente" }, "Copiar enlace")
+        )
+      )
+    );
+  }
+
+  // Home
   return React.createElement(
     "div",
     { className: "container" },
@@ -129,7 +196,7 @@ export default function App() {
     React.createElement(
       "div",
       { className: "two-col" },
-      // Left column: main chat card
+      // Left column: input principal
       React.createElement(
         "div",
         { className: "card" },
@@ -159,7 +226,7 @@ export default function App() {
         errorMsg ? React.createElement("div", { className: "error", style: { marginTop: 10 } }, `Error: ${errorMsg}`) : null
       ),
 
-      // Right column: solo recientes desde backend
+      // Right column: recientes
       React.createElement(
         "div",
         { className: "card" },
@@ -176,7 +243,7 @@ export default function App() {
                 "div",
                 null,
                 React.createElement("h4", null, item.text.length > 80 ? item.text.slice(0, 80) + "…" : item.text),
-                React.createElement("p", null, item.status === 'processing' ? 'Procesando…' : item.status === 'done' ? 'Completado' : (item.status || '')), 
+                React.createElement("p", null, item.status === 'processing' ? 'Procesando…' : item.status === 'done' ? 'Completado' : (item.status || '')),
                 React.createElement("p", null, new Date(item.createdAt).toLocaleString())
               ),
               React.createElement("a", { className: "chevron", href: `/zero/idea/${item.id}`, title: "Abrir" }, "›")
