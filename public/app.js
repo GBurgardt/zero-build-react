@@ -118,6 +118,8 @@ export default function App() {
 
   useEffect(() => {
     if (route.mode === "detail" && route.ideaId) loadDetail(route.ideaId);
+    // Log al backend para confirmar navegación a detalle (debug operacional)
+    try { fetch(`/zero-api/ping?event=detail_view&id=${encodeURIComponent(route.ideaId || '')}&section=${encodeURIComponent(route.section || '')}`).catch(() => {}); } catch (_) {}
   }, [route.mode, route.ideaId]);
 
   // Contenido actual según sección

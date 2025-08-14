@@ -339,8 +339,10 @@ const server = http.createServer(async (req, res) => {
 
   const url = new URL(req.url, `http://${req.headers.host}`);
   if (req.method === 'GET' && (url.pathname === '/zero-api/ping' || url.pathname === '/ping')) {
-    console.log('[zero-api] PING', new Date().toISOString());
-    return json(res, 200, { ok: true, t: Date.now() });
+    const params = Object.fromEntries(url.searchParams.entries());
+    const ua = String(req.headers['user-agent'] || '').slice(0, 120);
+    console.log('[zero-api] PING', { t: new Date().toISOString(), path: url.pathname, ...params, ua });
+    return json(res, 200, { ok: true, t: Date.now(), path: url.pathname, params });
   }
   if (req.method === 'POST' && url.pathname === '/chat') return handleChat(req, res);
   // Support both direct and nginx-rewritten paths
