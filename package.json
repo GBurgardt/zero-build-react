@@ -1,0 +1,10 @@
+{
+  "name": "zero-build-react",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Zero-build React app with minimal backend",
+  "dependencies": {
+    "mongodb": "^6.8.0"
+  }
+}
