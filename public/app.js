@@ -98,20 +98,21 @@ export default function App() {
 
   return React.createElement(
     "div",
-    { id: "app-root", style: { display: "grid", gap: 24 } },
+    { className: "container" },
     // HEADER
     React.createElement(
       "div",
-      { className: "card" },
-      React.createElement("h1", null, "🚀 Zero-build React - Chat + PokeAPI"),
-      React.createElement("p", null, "UI simple: chateá con una IA y mirá stats de Pokémon. ")
+      { className: "card header" },
+      React.createElement("h1", { className: "title" }, "Zero • Chat"),
+      React.createElement("p", { className: "subtitle" }, "Conversá con la IA. Sentí iOS.")
     ),
 
     // CHAT
     React.createElement(
       "div",
       { className: "card" },
-      React.createElement("h2", null, "💬 Chat con IA"),
+      React.createElement("div", { className: "section-title" }, "💬 Chat con IA"),
+      React.createElement("div", { className: "divider" }),
       React.createElement(
         "div",
         {
@@ -123,71 +124,42 @@ export default function App() {
         // Messages list
         React.createElement(
           "div",
-          {
-            style: {
-              display: "grid",
-              gap: 8,
-              maxHeight: 280,
-              overflowY: "auto",
-              padding: 8,
-              background: "rgba(0,0,0,0.03)",
-              borderRadius: 8
-            }
-          },
+          { className: "messages" },
           ...messages.map((m, idx) =>
             React.createElement(
               "div",
               {
                 key: idx,
-                style: {
-                  justifySelf: m.role === "user" ? "end" : "start",
-                  maxWidth: "80%",
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  background: m.role === "user" ? "#667eea" : "white",
-                  color: m.role === "user" ? "white" : "#333",
-                  border: m.role === "assistant" ? "1px solid #e6e6e6" : "none",
-                  whiteSpace: "pre-wrap"
-                }
+                className: `${m.role === "user" ? "row-right" : "row-left"}`
               },
-              m.content
+              React.createElement(
+                "div",
+                { className: `bubble ${m.role}` },
+                m.content
+              )
             )
           )
         ),
         // Input + Send
         React.createElement(
           "div",
-          { style: { display: "flex", gap: 8 } },
+          { className: "input-bar" },
           React.createElement("textarea", {
             value: input,
             onChange: (e) => setInput(e.target.value),
             onKeyDown,
             rows: 2,
             placeholder: "Escribí tu mensaje y presioná Enter...",
-            style: {
-              flex: 1,
-              padding: 10,
-              border: "1px solid #ccc",
-              borderRadius: 8,
-              fontFamily: "inherit"
-            }
+            className: "input"
           }),
           React.createElement(
             "button",
             {
               onClick: sendMessage,
               disabled: sending || !input.trim(),
-              style: {
-                padding: "10px 16px",
-                border: "2px solid #764ba2",
-                borderRadius: 8,
-                background: sending ? "#e0e0e0" : "white",
-                color: "#764ba2",
-                cursor: sending ? "not-allowed" : "pointer",
-                fontWeight: "bold"
-              }
+              className: "send"
             },
-            sending ? "Enviando..." : "Enviar"
+            sending ? "…" : "➤"
           )
         ),
         aiError ? React.createElement("div", { className: "error" }, `Error: ${aiError}`) : null
@@ -198,7 +170,8 @@ export default function App() {
     React.createElement(
       "div",
       { className: "card" },
-      React.createElement("h2", null, "🧪 Demo PokeAPI"),
+      React.createElement("div", { className: "section-title" }, "🧪 Demo PokeAPI"),
+      React.createElement("div", { className: "divider" }),
       React.createElement(
         "div",
         { style: { display: "flex", alignItems: "center", gap: 20, marginTop: 12 } },
