@@ -170,11 +170,14 @@ export default function App() {
     if (!mdLib || !purifyLib) return null;
     try {
       const safeContent = typeof currentContent === 'string' ? currentContent : String(currentContent || '');
+      if (!safeContent) return '';
       const html = (mdLib.parse ? mdLib.parse(safeContent) : mdLib(safeContent));
       const clean = typeof purifyLib?.sanitize === 'function' ? purifyLib.sanitize(html) : html;
       return clean;
     } catch (_) {
-      return null;
+      // Si el parser falla, mostramos texto plano
+      const safeContent = typeof currentContent === 'string' ? currentContent : String(currentContent || '');
+      return `<pre>${(safeContent || '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
     }
   }, [mdLib, purifyLib, currentContent]);
 
