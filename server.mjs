@@ -263,9 +263,11 @@ const server = http.createServer(async (req, res) => {
 
   const url = new URL(req.url, `http://${req.headers.host}`);
   if (req.method === 'POST' && url.pathname === '/chat') return handleChat(req, res);
-  if (req.method === 'POST' && url.pathname === '/zero-api/ideas') return handleCreateIdea(req, res);
-  if (req.method === 'GET' && url.pathname === '/zero-api/ideas') return handleListIdeas(req, res);
-  const ideaMatch = url.pathname.match(/^\/zero-api\/ideas\/(\w{24})$/);
+  // Support both direct and nginx-rewritten paths
+  if (req.method === 'POST' && (url.pathname === '/zero-api/ideas' || url.pathname === '/ideas')) return handleCreateIdea(req, res);
+  if (req.method === 'GET' && (url.pathname === '/zero-api/ideas' || url.pathname === '/ideas')) return handleListIdeas(req, res);
+  let ideaMatch = url.pathname.match(/^\/zero-api\/ideas\/(\w{24})$/);
+  if (!ideaMatch) ideaMatch = url.pathname.match(/^\/ideas\/(\w{24})$/);
   if (req.method === 'GET' && ideaMatch) return handleIdeaStatus(req, res, ideaMatch[1]);
   return notFound(res);
 });
