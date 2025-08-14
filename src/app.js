@@ -65,7 +65,7 @@ export default function App() {
   return React.createElement(
     "div",
     { className: "card" },
-    React.createElement("h1", null, "🚀 Zero-build React"),
+    React.createElement("h1", null, "🚀 Zero-build React - Deploy en 3 segundos!"),
     React.createElement(
       "div",
       { className: "pokemon-info" },
