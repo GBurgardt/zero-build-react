@@ -66,7 +66,9 @@ ssh -i "$SSH_KEY" "$SSH_HOST" "
   # Instalar deps backend si hay package.json
   if [ -f package.json ]; then
     if command -v pnpm >/dev/null 2>&1; then PM=pnpm; elif command -v yarn >/dev/null 2>&1; then PM=yarn; else PM=npm; fi
-    $PM install --silent --prod || $PM install --silent
+    if [ "$PM" = "pnpm" ]; then pnpm install --silent --prod || pnpm install --silent; fi
+    if [ "$PM" = "yarn" ]; then yarn install --silent --production || yarn install --silent; fi
+    if [ "$PM" = "npm" ]; then npm install --silent --only=prod || npm install --silent; fi
   fi
   if pm2 describe zero-api > /dev/null 2>&1; then
     pm2 restart zero-api --update-env
