@@ -2,34 +2,6 @@
 import React, { useEffect, useState } from "react";
 
 export default function App() {
-  // --- Pokemon demo (se muestra siempre dentro de la UI) ---
-  const [pokemon, setPokemon] = useState(null);
-  const [pokemonName, setPokemonName] = useState("charizard");
-  const [pokemonState, setPokemonState] = useState("loading"); // loading | ok | error
-  const [pokemonError, setPokemonError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    setPokemonState("loading");
-    fetch(`https://pokeapi.co/api/v2/pokemon/${pokemonName}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((data) => {
-        if (cancelled) return;
-        setPokemon(data);
-        setPokemonState("ok");
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setPokemonError(e.message);
-        setPokemonState("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pokemonName]);
 
   // --- Chat super simple ---
   const [messages, setMessages] = useState([
@@ -99,144 +71,101 @@ export default function App() {
   return React.createElement(
     "div",
     { className: "container" },
-    // HEADER
+    // Headline
     React.createElement(
       "div",
-      { className: "card header" },
-      React.createElement("h1", { className: "title" }, "Zero • Chat"),
-      React.createElement("p", { className: "subtitle" }, "Conversá con la IA. Sentí iOS.")
+      { className: "headline" },
+      React.createElement("h1", null, "Research Lab"),
+      React.createElement("p", null, "Procesá y analizá ideas para convertirlas en conocimiento")
     ),
 
-    // CHAT
+    // Two column layout
     React.createElement(
       "div",
-      { className: "card" },
-      React.createElement("div", { className: "section-title" }, "💬 Chat con IA"),
-      React.createElement("div", { className: "divider" }),
+      { className: "two-col" },
+      // Left column: main chat card
       React.createElement(
         "div",
-        {
-          style: {
-            display: "grid",
-            gap: 12
-          }
-        },
-        // Messages list
+        { className: "card" },
+        React.createElement("div", { className: "section-title" }, "Tu texto"),
+        React.createElement("div", { className: "divider" }),
         React.createElement(
           "div",
           { className: "messages" },
           ...messages.map((m, idx) =>
             React.createElement(
               "div",
-              {
-                key: idx,
-                className: `${m.role === "user" ? "row-right" : "row-left"}`
-              },
-              React.createElement(
-                "div",
-                { className: `bubble ${m.role}` },
-                m.content
-              )
+              { key: idx, className: `${m.role === "user" ? "row-right" : "row-left"}` },
+              React.createElement("div", { className: `bubble ${m.role}` }, m.content)
             )
           )
         ),
-        // Input + Send
         React.createElement(
           "div",
-          { className: "input-bar" },
+          { className: "input-bar", style: { marginTop: 16 } },
           React.createElement("textarea", {
             value: input,
             onChange: (e) => setInput(e.target.value),
             onKeyDown,
-            rows: 2,
-            placeholder: "Escribí tu mensaje y presioná Enter...",
+            rows: 3,
+            placeholder: "Pegá un texto o escribí acá y presioná Enter...",
             className: "input"
           }),
           React.createElement(
             "button",
-            {
-              onClick: sendMessage,
-              disabled: sending || !input.trim(),
-              className: "send"
-            },
+            { onClick: sendMessage, disabled: sending || !input.trim(), className: "send" },
             sending ? "…" : "➤"
           )
         ),
-        aiError ? React.createElement("div", { className: "error" }, `Error: ${aiError}`) : null
-      )
-    ),
+        aiError ? React.createElement("div", { className: "error", style: { marginTop: 10 } }, `Error: ${aiError}`) : null
+      ),
 
-    // POKEMON
-    React.createElement(
-      "div",
-      { className: "card" },
-      React.createElement("div", { className: "section-title" }, "🧪 Demo PokeAPI"),
-      React.createElement("div", { className: "divider" }),
+      // Right column: search box + examples + list (estático)
       React.createElement(
         "div",
-        { style: { display: "flex", alignItems: "center", gap: 20, marginTop: 12 } },
-        pokemonState === "loading"
-          ? React.createElement("p", { className: "loading" }, "Cargando datos...")
-          : pokemonState === "error"
-          ? React.createElement("div", { className: "error" }, `Error: ${pokemonError}`)
-          : React.createElement(
-              React.Fragment,
-              null,
-              pokemon?.sprites?.front_default
-                ? React.createElement("img", {
-                    src: pokemon.sprites.front_default,
-                    alt: pokemon.name,
-                    width: 96,
-                    height: 96,
-                    className: "pokemon-sprite"
-                  })
-                : null,
+        { className: "card" },
+        React.createElement(
+          "div",
+          { className: "searchbar" },
+          React.createElement("input", { placeholder: "Escribe y presioná Enter: 'top 5 del último mes sobre conciencia'" }),
+          React.createElement("button", { className: "btn-primary" }, "Buscar")
+        ),
+        React.createElement(
+          "div",
+          { className: "chip-row", style: { marginTop: 12 } },
+          ...[
+            "top 5 del último mes sobre conciencia",
+            "top 10 de siempre sobre IA",
+            "mejor de esta semana sobre metacognición"
+          ].map((t, i) => React.createElement("div", { key: i, className: "chip" }, t))
+        ),
+        React.createElement(
+          "div",
+          { className: "tabs" },
+          React.createElement("div", { className: "tab active" }, "Recientes"),
+          React.createElement("div", { className: "tab" }, "Favoritos"),
+          React.createElement("div", { className: "tab" }, "Studio")
+        ),
+        React.createElement(
+          "div",
+          { className: "list" },
+          ...[
+            { t: "Conciencia artificial como marcador tribal en el debate sobre la IA", s: "mira:<<<TEXTO ORIGINAL:", d: "miércoles 13, 22:30" },
+            { t: "La conciencia como marcador tribal en la inteligencia artificial", s: "mira:<<<TEXTO ORIGINAL:", d: "miércoles 13, 23:30" },
+            { t: "Guardrails y conciencia en la IA", s: "HILO DE TWITTER COMPLETO:", d: "miércoles 13, 22:09" },
+          ].map((item, idx) =>
+            React.createElement(
+              "div",
+              { key: idx, className: "list-item" },
               React.createElement(
                 "div",
                 null,
-                React.createElement("h3", null, pokemon?.name?.toUpperCase()),
-                pokemon
-                  ? React.createElement(
-                      React.Fragment,
-                      null,
-                      React.createElement("p", null, `#${pokemon.id} - ${pokemon.types.map(t => t.type.name).join(", ")}`),
-                      React.createElement("p", null, `Altura: ${pokemon.height / 10}m`),
-                      React.createElement("p", null, `Peso: ${pokemon.weight / 10}kg`)
-                    )
-                  : null
-              )
+                React.createElement("h4", null, item.t),
+                React.createElement("p", null, item.s),
+                React.createElement("p", null, item.d)
+              ),
+              React.createElement("div", { className: "chevron" }, "›")
             )
-      ),
-      pokemon && pokemon.stats
-        ? React.createElement(
-            "div",
-            { style: { display: "grid", gap: 8, marginTop: 12 } },
-            React.createElement("h4", null, "Stats"),
-            ...pokemon.stats.map((stat) =>
-              createStatBar(stat.stat.name.replace("-", " ").toUpperCase(), stat.base_stat)
-            )
-          )
-        : null,
-      React.createElement(
-        "div",
-        { style: { marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" } },
-        ["pikachu", "charizard", "mewtwo", "bulbasaur", "snorlax"].map((name) =>
-          React.createElement(
-            "button",
-            {
-              key: name,
-              onClick: () => setPokemonName(name),
-              style: {
-                padding: "6px 12px",
-                border: "1px solid #667eea",
-                borderRadius: 8,
-                background: pokemonName === name ? "#667eea" : "white",
-                color: pokemonName === name ? "white" : "#667eea",
-                cursor: "pointer",
-                fontWeight: "bold"
-              }
-            },
-            name
           )
         )
       )
