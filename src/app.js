@@ -8,6 +8,32 @@ export default function App() {
   const [pokemonName, setPokemonName] = useState("charizard"); // CAMBIO: ahora empieza con Charizard!
   const [deployTime] = useState(new Date().toLocaleTimeString());
 
+  // Estado para OpenAI demo
+  const [prompt, setPrompt] = useState("Escribí un haiku sobre Charizard en español.");
+  const [aiAnswer, setAiAnswer] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+
+  const consultarAI = async () => {
+    try {
+      setAiError("");
+      setAiLoading(true);
+      setAiAnswer("");
+      const r = await fetch("/zero-api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, model: "gpt-5" })
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.detail || data.error || "Error en OpenAI");
+      setAiAnswer(data.text || "");
+    } catch (e) {
+      setAiError(e.message);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   useEffect(() => {
     setEstado("cargando");
     fetch(`https://pokeapi.co/api/v2/pokemon/${pokemonName}`)
@@ -124,6 +150,67 @@ export default function App() {
             name
           )
         )
+      )
+    ),
+    // --- OpenAI demo ---
+    React.createElement(
+      "div",
+      null,
+      React.createElement("h3", null, "OpenAI (GPT-5)"),
+      React.createElement(
+        "div",
+        { style: { display: "grid", gap: "8px" } },
+        React.createElement("textarea", {
+          value: prompt,
+          onChange: (e) => setPrompt(e.target.value),
+          rows: 3,
+          style: {
+            width: "100%",
+            padding: "10px",
+            border: "1px solid #ccc",
+            borderRadius: "8px",
+            fontFamily: "inherit"
+          }
+        }),
+        React.createElement(
+          "div",
+          { style: { display: "flex", gap: "8px", alignItems: "center" } },
+          React.createElement(
+            "button",
+            {
+              onClick: consultarAI,
+              disabled: aiLoading,
+              style: {
+                padding: "8px 16px",
+                border: "2px solid #764ba2",
+                borderRadius: "8px",
+                background: aiLoading ? "#e0e0e0" : "white",
+                color: "#764ba2",
+                cursor: aiLoading ? "not-allowed" : "pointer",
+                fontWeight: "bold"
+              }
+            },
+            aiLoading ? "Consultando..." : "Consultar"
+          ),
+          React.createElement("small", { style: { color: "#666" } }, "Usa '/zero-api' en el backend")
+        ),
+        aiError
+          ? React.createElement("div", { className: "error" }, `Error: ${aiError}`)
+          : null,
+        aiAnswer
+          ? React.createElement(
+              "pre",
+              {
+                style: {
+                  whiteSpace: "pre-wrap",
+                  background: "#f7f7f7",
+                  padding: "12px",
+                  borderRadius: "8px"
+                }
+              },
+              aiAnswer
+            )
+          : null
       )
     ),
     React.createElement(
