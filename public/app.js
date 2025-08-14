@@ -33,6 +33,11 @@ export default function App() {
   const [toc, setToc] = useState([]);
   // Mapa id->contenido cuando el endpoint full esté disponible
   const [sectionMap, setSectionMap] = useState({});
+  // Título principal (H1)
+  const [mainTitle, setMainTitle] = useState("Idea");
+  // Markdown renderer libs
+  const [mdLib, setMdLib] = useState(null);
+  const [purifyLib, setPurifyLib] = useState(null);
 
   function slugify(str) {
     return (str || 'seccion')
@@ -64,6 +69,10 @@ export default function App() {
             }
           }
           setSectionMap(nextMap);
+          // Título principal desde markdown
+          const raw = data.resume_raw || data.result || '';
+          const m1 = raw.match(/^#\s+(.+)$/m);
+          setMainTitle(m1 ? m1[1].trim() : 'Idea');
           if (data.status === "processing") pollStatus(id);
           return;
         }
@@ -95,12 +104,15 @@ export default function App() {
           }
         }
         setSectionMap(nextMap);
+        const m1 = data.result.match(/^#\s+(.+)$/m);
+        setMainTitle(m1 ? m1[1].trim() : 'Idea');
       }
       if (data.status === "processing") pollStatus(id);
     } catch (e) {
       setDetail({ loading: false, status: "error", result: String(e?.message || e) });
       setToc([]);
       setSectionMap({});
+      setMainTitle('Idea');
     }
   };
 
@@ -113,7 +125,11 @@ export default function App() {
     if (!detail.result) return "";
     if (!route.section) return detail.result;
     // Buscar por id de sección en el mapa
-    if (sectionMap[route.section]) return sectionMap[route.section];
+    if (sectionMap[route.section]) {
+      const currentItem = toc.find(t => t.id === route.section);
+      const header = currentItem ? `## ${currentItem.title}\n\n` : '';
+      return header + sectionMap[route.section];
+    }
     return "Sección no encontrada";
   }, [detail.result, route.section, sectionMap]);
 
@@ -125,6 +141,37 @@ export default function App() {
       setRoute({ mode: 'detail', ideaId: route.ideaId, section: first.id });
     }
   }, [route.mode, route.ideaId, route.section, toc]);
+
+  // Cargar libs de Markdown en el navegador
+  useEffect(() => {
+    (async () => {
+      try {
+        const m = await import('https://esm.sh/marked@12');
+        const d = await import('https://esm.sh/dompurify@3');
+        const marked = m.marked || m.default || m;
+        const DOMPurify = d.default || d;
+        // Config suave: saltos de línea y tipografía amigable
+        if (marked?.setOptions) {
+          marked.setOptions({ breaks: true, smartypants: true, mangle: false, headerIds: false });
+        }
+        setMdLib(marked);
+        setPurifyLib(DOMPurify);
+      } catch (_) {
+        // fallback silencioso, se mostrará como texto plano
+      }
+    })();
+  }, []);
+
+  const htmlContent = React.useMemo(() => {
+    if (!mdLib || !purifyLib) return null;
+    try {
+      const html = (mdLib.parse ? mdLib.parse(currentContent) : mdLib(currentContent));
+      const clean = purifyLib.sanitize(html);
+      return clean;
+    } catch (_) {
+      return null;
+    }
+  }, [mdLib, purifyLib, currentContent]);
 
   const loadIdeas = async () => {
     try {
@@ -238,7 +285,7 @@ export default function App() {
       React.createElement(
         "div",
         { className: "headline" },
-        React.createElement("h1", null, "Idea"),
+        React.createElement("h1", null, mainTitle || "Idea"),
         React.createElement("p", null, `ID: ${route.ideaId}`)
       ),
       React.createElement(
@@ -284,15 +331,17 @@ export default function App() {
                   )
                 ))
               ),
-              // Columna derecha: contenido
+              // Columna derecha: contenido en Markdown
               React.createElement(
                 "div",
                 { style: { flex: 1 } },
-                React.createElement(
-                  "pre",
-                  { style: { whiteSpace: "pre-wrap", margin: 0 } },
-                  (currentContent || "Sin contenido aún.")
-                )
+                htmlContent
+                  ? React.createElement("div", { className: "md", dangerouslySetInnerHTML: { __html: htmlContent } })
+                  : React.createElement(
+                      "pre",
+                      { style: { whiteSpace: "pre-wrap", margin: 0 } },
+                      (currentContent || "Sin contenido aún.")
+                    )
               )
             ),
         React.createElement("div", { style: { marginTop: 16, display: 'flex', gap: 12 } },
