@@ -22,22 +22,21 @@ ssh_base() { ssh -i "$SSH_KEY" "$SSH_HOST" "$@"; }
 # Tailing crudo de PM2 (sin formateo) para que aparezcan exactamente tus console.log
 tail_api_follow() {
   local FILTER_RE="${1:-}"
-  local CMD="tail -n 200 -F $HOME/.pm2/logs/zero-api-out.log $HOME/.pm2/logs/zero-api-error.log"
+  # Ejecutar con $HOME del servidor (no expandir localmente)
   if [ -n "$FILTER_RE" ]; then
-    ssh_base "bash -lc '$CMD | stdbuf -oL -eL grep --line-buffered -E -- "$FILTER_RE"'"
+    ssh_base bash -lc 'tail -n 200 -F "$HOME"/.pm2/logs/zero-api-out.log "$HOME"/.pm2/logs/zero-api-error.log | stdbuf -oL -eL grep --line-buffered -E -- '"$FILTER_RE"''
   else
-    ssh_base "$CMD"
+    ssh_base bash -lc 'tail -n 200 -F "$HOME"/.pm2/logs/zero-api-out.log "$HOME"/.pm2/logs/zero-api-error.log'
   fi
 }
 
 tail_api_last() {
   local LINES="${1:-200}"
   local FILTER_RE="${2:-}"
-  local CMD="tail -n $LINES $HOME/.pm2/logs/zero-api-out.log $HOME/.pm2/logs/zero-api-error.log"
   if [ -n "$FILTER_RE" ]; then
-    ssh_base "bash -lc '$CMD | grep -E -- "$FILTER_RE"'"
+    ssh_base bash -lc 'tail -n '"$LINES"' "$HOME"/.pm2/logs/zero-api-out.log "$HOME"/.pm2/logs/zero-api-error.log | grep -E -- '"$FILTER_RE"''
   else
-    ssh_base "$CMD"
+    ssh_base bash -lc 'tail -n '"$LINES"' "$HOME"/.pm2/logs/zero-api-out.log "$HOME"/.pm2/logs/zero-api-error.log'
   fi
 }
 
@@ -56,11 +55,11 @@ case "$MODE" in
     # Interleave: api (raw PM2 files), web (pm2), nginx
     # Filtro opcional que se aplica a todos los streams
     FILTER="$ARG2"
-    ssh_base "bash -lc 'set -m; \
-      (tail -n 200 -F $HOME/.pm2/logs/zero-api-out.log $HOME/.pm2/logs/zero-api-error.log ${FILTER:+| stdbuf -oL -eL grep --line-buffered -E -- \"$FILTER\"} &) ; \
-      (pm2 logs zero-web ${FILTER:+| grep -E -- \"$FILTER\"} &) ; \
-      (sudo tail -F /var/log/nginx/access.log /var/log/nginx/error.log ${FILTER:+| grep -E -- \"$FILTER\"} &) ; \
-      wait'"
+    ssh_base bash -lc 'set -m; \
+      (tail -n 200 -F "$HOME"/.pm2/logs/zero-api-out.log "$HOME"/.pm2/logs/zero-api-error.log'" ${FILTER:+" | stdbuf -oL -eL grep --line-buffered -E -- '$FILTER'"}"' &) ; \
+      (pm2 logs zero-web'" ${FILTER:+" | grep -E -- '$FILTER'"}"' &) ; \
+      (sudo tail -F /var/log/nginx/access.log /var/log/nginx/error.log'" ${FILTER:+" | grep -E -- '$FILTER'"}"' &) ; \
+      wait'
     ;;
   last)
     # Últimas N líneas de backend con filtro opcional

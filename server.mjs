@@ -348,6 +348,7 @@ const server = http.createServer(async (req, res) => {
   // Full payload for detail view
   const ideaFull = url.pathname.match(/^\/(?:zero-api\/)?ideas\/(\w{24})\/full$/);
   if (req.method === 'GET' && ideaFull) {
+    console.log('[zero-api] GET /ideas/:id/full', ideaFull[1]);
     try {
       const { ideas } = await getDb();
       const doc = await ideas.findOne({ _id: new ObjectId(ideaFull[1]) });
@@ -364,6 +365,7 @@ const server = http.createServer(async (req, res) => {
         updatedAt: doc.updatedAt,
       });
     } catch (e) {
+      console.error('[zero-api] ERROR /ideas/:id/full', String(e?.message || e));
       return json(res, 500, { error: 'server_error', detail: String(e?.message || e) });
     }
   }
