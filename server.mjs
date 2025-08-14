@@ -6,6 +6,9 @@ import https from 'node:https';
 import { readFileSync, existsSync } from 'node:fs';
 import { URL } from 'node:url';
 import { MongoClient, ObjectId } from 'mongodb';
+import OpenAI from 'openai';
+import { systemPrompt as superInfoSystem, userPrompt as superInfoUser } from './server/prompts/superinformation.prompt.mjs';
+import { systemPrompt as bukSystem, userPrompt as bukUser } from './server/prompts/bukowsky.prompt.mjs';
 
 function loadDotEnvIfPresent(envPath = '.env') {
   try {
@@ -34,6 +37,8 @@ const PORT = Number(process.env.PORT || 3004);
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'; // Set OPENAI_MODEL=gpt-5 if available
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/zerodb';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5';
+const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 let mongoClient;
 let ideasCollection;
@@ -192,17 +197,88 @@ async function processIdea(id) {
   const doc = await ideas.findOne({ _id });
   if (!doc) return;
   try {
-    const messages = [
-      { role: 'system', content: 'Eres un analista que resume en 5 bullets claros.' },
-      { role: 'user', content: doc.text },
+    // Paso 1: Super Information con GPT-5
+    const superInput = [
+      { role: 'system', content: [{ type: 'input_text', text: superInfoSystem }] },
+      { role: 'user', content: [{ type: 'input_text', text: superInfoUser.replace('{input}', doc.text) }] },
     ];
-    const response = await callOpenAIChat(doc.model || DEFAULT_MODEL, messages, 0.4);
-    const data = await response.json();
-    const text = data?.choices?.[0]?.message?.content ?? '';
-    await ideas.updateOne({ _id }, { $set: { status: 'done', result: text, updatedAt: new Date() } });
+    // @ts-ignore
+    const superResp = await openai.responses.create({
+      model: OPENAI_MODEL,
+      input: superInput,
+      text: { format: { type: 'text' }, verbosity: 'medium' },
+      reasoning: { effort: 'high', summary: 'auto' },
+      tools: [],
+      store: true,
+      max_output_tokens: 16384,
+    });
+    const superText = superResp.output_text || (superResp.output?.[0]?.content?.[0]?.text) || '';
+    const superinfo = (superText.match(/<superinfo>([\s\S]*?)<\/superinfo>/i)?.[1] || superText).trim();
+    await ideas.updateOne({ _id }, { $set: { superinfo_raw: superinfo, updatedAt: new Date() } });
+
+    // Paso 2: Bukowsky con GPT-5
+    const bukInput = [
+      { role: 'system', content: [{ type: 'input_text', text: bukSystem }] },
+      { role: 'user', content: [{ type: 'input_text', text: `${bukUser}\nInput: ${superinfo}` }] },
+    ];
+    // @ts-ignore
+    const bukResp = await openai.responses.create({
+      model: OPENAI_MODEL,
+      input: bukInput,
+      text: { format: { type: 'text' }, verbosity: 'medium' },
+      reasoning: { effort: 'high', summary: 'auto' },
+      tools: [],
+      store: true,
+      max_output_tokens: 16384,
+    });
+    const bukText = bukResp.output_text || (bukResp.output?.[0]?.content?.[0]?.text) || '';
+    const resume = (bukText.match(/<resume>([\s\S]*?)<\/resume>/i)?.[1] || bukText).trim();
+
+    const { toc, sections } = deriveSectionsFromResume(resume);
+    await ideas.updateOne({ _id }, { $set: { status: 'done', result: resume, toc, sections, updatedAt: new Date() } });
   } catch (e) {
     await ideas.updateOne({ _id }, { $set: { status: 'error', error: String(e?.message || e), updatedAt: new Date() } });
   }
+}
+
+function deriveSectionsFromResume(resumeText) {
+  const lines = resumeText.split(/\r?\n/);
+  const sections = [];
+  const toc = [];
+  let current = { id: 'intro', title: 'Introducción', content: '' };
+  for (const line of lines) {
+    const h1 = line.match(/^#\s+(.*)/);
+    const h2 = line.match(/^##\s+(.*)/);
+    if (h1) {
+      if (current.content.trim()) { sections.push({ ...current }); }
+      const title = h1[1].trim();
+      const id = slugify(title);
+      current = { id, title, content: '' };
+      toc.push({ id, title });
+      continue;
+    }
+    if (h2) {
+      if (current.content.trim()) { sections.push({ ...current }); }
+      const title = h2[1].trim();
+      const id = slugify(title);
+      current = { id, title, content: '' };
+      toc.push({ id, title });
+      continue;
+    }
+    current.content += line + '\n';
+  }
+  if (current.content.trim()) sections.push(current);
+  if (!toc.length) toc.push({ id: 'contenido', title: 'Contenido' });
+  return { toc, sections };
+}
+
+function slugify(str) {
+  return (str || 'seccion')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .slice(0, 64);
 }
 
 async function handleIdeaStatus(req, res, id) {
@@ -269,6 +345,28 @@ const server = http.createServer(async (req, res) => {
   let ideaMatch = url.pathname.match(/^\/zero-api\/ideas\/(\w{24})$/);
   if (!ideaMatch) ideaMatch = url.pathname.match(/^\/ideas\/(\w{24})$/);
   if (req.method === 'GET' && ideaMatch) return handleIdeaStatus(req, res, ideaMatch[1]);
+  // Full payload for detail view
+  const ideaFull = url.pathname.match(/^\/(?:zero-api|)\/ideas\/(\w{24})\/full$/);
+  if (req.method === 'GET' && ideaFull) {
+    try {
+      const { ideas } = await getDb();
+      const doc = await ideas.findOne({ _id: new ObjectId(ideaFull[1]) });
+      if (!doc) return json(res, 404, { error: 'not_found' });
+      return json(res, 200, {
+        id: String(doc._id),
+        status: doc.status,
+        text: doc.text,
+        superinfo_raw: doc.superinfo_raw,
+        resume_raw: doc.result,
+        toc: doc.toc || [],
+        sections: doc.sections || [],
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+      });
+    } catch (e) {
+      return json(res, 500, { error: 'server_error', detail: String(e?.message || e) });
+    }
+  }
   return notFound(res);
 });
 
