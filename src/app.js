@@ -5,7 +5,7 @@ export default function App() {
   const [pokemon, setPokemon] = useState(null);
   const [estado, setEstado] = useState("cargando");
   const [error, setError] = useState("");
-  const [pokemonName, setPokemonName] = useState("pikachu");
+  const [pokemonName, setPokemonName] = useState("charizard"); // CAMBIO: ahora empieza con Charizard!
   const [deployTime] = useState(new Date().toLocaleTimeString());
 
   useEffect(() => {
