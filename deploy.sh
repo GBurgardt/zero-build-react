@@ -65,10 +65,13 @@ ssh -i "$SSH_KEY" "$SSH_HOST" "
   cd '$REMOTE_DIR'
   # Instalar deps backend si hay package.json
   if [ -f package.json ]; then
-    if command -v pnpm >/dev/null 2>&1; then PM=pnpm; elif command -v yarn >/dev/null 2>&1; then PM=yarn; else PM=npm; fi
-    if [ "$PM" = "pnpm" ]; then pnpm install --silent --prod || pnpm install --silent; fi
-    if [ "$PM" = "yarn" ]; then yarn install --silent --production || yarn install --silent; fi
-    if [ "$PM" = "npm" ]; then npm install --silent --only=prod || npm install --silent; fi
+    if command -v pnpm >/dev/null 2>&1; then
+      pnpm install --silent --prod || pnpm install --silent
+    elif command -v yarn >/dev/null 2>&1; then
+      yarn install --silent --production || yarn install --silent
+    else
+      npm install --silent --only=prod || npm install --silent
+    fi
   fi
   if pm2 describe zero-api > /dev/null 2>&1; then
     pm2 restart zero-api --update-env
