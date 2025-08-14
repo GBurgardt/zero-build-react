@@ -2,36 +2,69 @@
 import React, { useEffect, useState } from "react";
 
 export default function App() {
-
-  // --- Chat super simple ---
-  const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hola! Soy la IA de Zero. Preguntame algo." },
-  ]);
+  // Entrada principal
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [aiError, setAiError] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const sendMessage = async () => {
-    const trimmed = input.trim();
-    if (!trimmed || sending) return;
-    const next = [...messages, { role: "user", content: trimmed }];
-    setMessages(next);
-    setInput("");
-    setSending(true);
-    setAiError("");
+  // Lista de ideas recientes (desde backend)
+  const [ideas, setIdeas] = useState([]); // {id, text, status, createdAt}
 
+  const loadIdeas = async () => {
     try {
-      const r = await fetch("/zero-api/chat", {
+      const r = await fetch("/zero-api/ideas");
+      if (!r.ok) return;
+      const data = await r.json();
+      if (Array.isArray(data.items)) setIdeas(data.items);
+    } catch (_) {}
+  };
+
+  useEffect(() => { loadIdeas(); }, []);
+
+  const upsertIdea = (draft) => {
+    setIdeas((prev) => {
+      const exists = prev.find((i) => i.id === draft.id);
+      if (exists) {
+        return prev.map((i) => (i.id === draft.id ? { ...exists, ...draft } : i));
+      }
+      return [draft, ...prev];
+    });
+  };
+
+  const pollStatus = async (id, attempts = 40) => {
+    for (let i = 0; i < attempts; i++) {
+      await new Promise((res) => setTimeout(res, 1500));
+      try {
+        const r = await fetch(`/zero-api/ideas/${id}`);
+        if (!r.ok) continue;
+        const data = await r.json();
+        if (data.status && data.status !== "processing") {
+          upsertIdea({ id, status: data.status, result: data.result });
+          return;
+        }
+      } catch (_) {}
+    }
+  };
+
+  const onSubmit = async () => {
+    const text = input.trim();
+    if (!text || sending) return;
+    setSending(true);
+    setErrorMsg("");
+    try {
+      const r = await fetch("/zero-api/ideas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next, model: "gpt-5" })
+        body: JSON.stringify({ text })
       });
       const data = await r.json();
-      if (!r.ok || data.error) throw new Error(data.detail || data.error || "Error en OpenAI");
-      const answer = (data.text || "").trim();
-      setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
-    } catch (err) {
-      setAiError(err.message || String(err));
+      if (!r.ok || data.error) throw new Error(data.detail || data.error || "Error creando idea");
+      const draft = { id: data.id, text, status: data.status || "processing", createdAt: new Date().toISOString() };
+      upsertIdea(draft);
+      setInput("");
+      pollStatus(data.id);
+    } catch (e) {
+      setErrorMsg(e.message);
     } finally {
       setSending(false);
     }
@@ -40,7 +73,7 @@ export default function App() {
   const onKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      onSubmit();
     }
   };
 
@@ -104,17 +137,6 @@ export default function App() {
         React.createElement("div", { className: "divider" }),
         React.createElement(
           "div",
-          { className: "messages" },
-          ...messages.map((m, idx) =>
-            React.createElement(
-              "div",
-              { key: idx, className: `${m.role === "user" ? "row-right" : "row-left"}` },
-              React.createElement("div", { className: `bubble ${m.role}` }, m.content)
-            )
-          )
-        ),
-        React.createElement(
-          "div",
           { className: "input-bar", style: { marginTop: 16 } },
           React.createElement("textarea", {
             value: input,
@@ -126,7 +148,7 @@ export default function App() {
           }),
           React.createElement(
             "button",
-            { onClick: sendMessage, disabled: sending || !input.trim(), className: "send", title: "Enviar" },
+            { onClick: onSubmit, disabled: sending || !input.trim(), className: "send", title: "Enviar" },
             React.createElement(
               "svg",
               { viewBox: "0 0 24 24", fill: "none", xmlns: "http://www.w3.org/2000/svg" },
@@ -134,54 +156,30 @@ export default function App() {
             )
           )
         ),
-        aiError ? React.createElement("div", { className: "error", style: { marginTop: 10 } }, `Error: ${aiError}`) : null
+        errorMsg ? React.createElement("div", { className: "error", style: { marginTop: 10 } }, `Error: ${errorMsg}`) : null
       ),
 
-      // Right column: search box + examples + list (estático)
+      // Right column: solo recientes desde backend
       React.createElement(
         "div",
         { className: "card" },
-        React.createElement(
-          "div",
-          { className: "searchbar" },
-          React.createElement("input", { placeholder: "Escribe y presioná Enter: 'top 5 del último mes sobre conciencia'" }),
-          React.createElement("button", { className: "btn-primary" }, "Buscar")
-        ),
-        React.createElement(
-          "div",
-          { className: "chip-row", style: { marginTop: 12 } },
-          ...[
-            "top 5 del último mes sobre conciencia",
-            "top 10 de siempre sobre IA",
-            "mejor de esta semana sobre metacognición"
-          ].map((t, i) => React.createElement("div", { key: i, className: "chip" }, t))
-        ),
-        React.createElement(
-          "div",
-          { className: "tabs" },
-          React.createElement("div", { className: "tab active" }, "Recientes"),
-          React.createElement("div", { className: "tab" }, "Favoritos"),
-          React.createElement("div", { className: "tab" }, "Studio")
-        ),
+        React.createElement("div", { className: "section-title" }, "Recientes"),
+        React.createElement("div", { className: "divider" }),
         React.createElement(
           "div",
           { className: "list" },
-          ...[
-            { t: "Conciencia artificial como marcador tribal en el debate sobre la IA", s: "mira:<<<TEXTO ORIGINAL:", d: "miércoles 13, 22:30" },
-            { t: "La conciencia como marcador tribal en la inteligencia artificial", s: "mira:<<<TEXTO ORIGINAL:", d: "miércoles 13, 23:30" },
-            { t: "Guardrails y conciencia en la IA", s: "HILO DE TWITTER COMPLETO:", d: "miércoles 13, 22:09" },
-          ].map((item, idx) =>
+          ...ideas.map((item, idx) =>
             React.createElement(
               "div",
               { key: idx, className: "list-item" },
               React.createElement(
                 "div",
                 null,
-                React.createElement("h4", null, item.t),
-                React.createElement("p", null, item.s),
-                React.createElement("p", null, item.d)
+                React.createElement("h4", null, item.text.length > 80 ? item.text.slice(0, 80) + "…" : item.text),
+                React.createElement("p", null, item.status === 'processing' ? 'Procesando…' : item.status === 'done' ? 'Completado' : (item.status || '')), 
+                React.createElement("p", null, new Date(item.createdAt).toLocaleString())
               ),
-              React.createElement("div", { className: "chevron" }, "›")
+              React.createElement("a", { className: "chevron", href: `/zero/idea/${item.id}`, title: "Abrir" }, "›")
             )
           )
         )
