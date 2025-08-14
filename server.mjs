@@ -372,4 +372,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[zero-api] listening on http://127.0.0.1:${PORT}`);
+  console.log('[zero-api] LOG-READY: para ver estos logs usa ./logs.sh api');
 });
