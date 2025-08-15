@@ -596,7 +596,12 @@ export default function App() {
       // Inline controls to generate Article/Pragmatic from THIS idea
       React.createElement(
         "div",
-        { className: "composer", style: { marginTop: 12, marginBottom: 12 } },
+        { 
+          className: "composer", 
+          style: { marginTop: 24, marginBottom: 32, opacity: 0.85, transition: 'opacity 0.3s ease' },
+          onMouseEnter: (e) => e.currentTarget.style.opacity = '1',
+          onMouseLeave: (e) => e.currentTarget.style.opacity = '0.85'
+        },
         React.createElement(
           "div",
           { className: "composer-controls", style: { display: 'flex', gap: 12 } },
