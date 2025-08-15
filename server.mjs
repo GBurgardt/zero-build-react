@@ -675,6 +675,7 @@ async function handleArticleStream(req, res, articleId) {
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
       'Access-Control-Allow-Origin': '*',
+      'X-Accel-Buffering': 'no', // Disable nginx buffering for SSE
     });
     
     // Send initial article state
