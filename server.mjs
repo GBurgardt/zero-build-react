@@ -262,7 +262,7 @@ async function processWithClaude(id) {
     console.log('[claude] User message:', superInfoMessages[0]?.content?.substring(0, 100) + '...');
     
     const superInfoResponse = await anthropic.messages.create({
-      model: 'claude-3-opus-20240229', // Claude Opus 4.1
+      model: 'claude-opus-4-1-20250805', // Claude Opus 4.1
       max_tokens: 8000,
       temperature: 0.7,
       system: superInfoSystem,
@@ -288,7 +288,7 @@ async function processWithClaude(id) {
     console.log('[claude] Bukowski input length:', superinfo?.length || 0);
     
     const bukResponse = await anthropic.messages.create({
-      model: 'claude-3-opus-20240229', // Claude Opus 4.1
+      model: 'claude-opus-4-1-20250805', // Claude Opus 4.1
       max_tokens: 8000,
       temperature: 0.7,
       system: bukSystem,
