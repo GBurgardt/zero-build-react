@@ -7,17 +7,19 @@
 }
 
 :root {
-  /* Colors - Minimal palette */
-  --text-primary: #1d1d1f;
-  --text-secondary: #86868b;
-  --text-tertiary: #515154;
-  --background: #FAFAFA;
-  --link: #007AFF;
-  --link-hover: #0051d5;
-  --selection: rgba(0, 122, 255, 0.15);
-  --quote-border: rgba(0, 122, 255, 0.2);
-  --code-bg: rgba(0, 0, 0, 0.03);
-  --divider: rgba(0, 0, 0, 0.06);
+  /* Dark Mode Foundation - Sophisticated blacks and grays */
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #6e6e73;
+  --background: #000000;
+  --surface: #0a0a0a;
+  --surface-elevated: #1c1c1e;
+  --link: #0a84ff;
+  --link-hover: #409cff;
+  --selection: rgba(10, 132, 255, 0.25);
+  --quote-border: rgba(10, 132, 255, 0.3);
+  --code-bg: rgba(255, 255, 255, 0.05);
+  --divider: rgba(255, 255, 255, 0.08);
   
   /* Typography */
   --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -78,7 +80,7 @@ body {
   padding-right: 0;
 }
 
-/* Sidebar derecho fijo */
+/* Sidebar derecho fijo - Dark elegance */
 .sidebar-right {
   position: fixed;
   right: 0;
@@ -86,12 +88,12 @@ body {
   bottom: 0;
   width: 260px;
   background: linear-gradient(88deg, 
-    rgba(255, 255, 255, 0.0) 0%,
-    rgba(252, 252, 252, 0.3) 10%,
-    rgba(250, 250, 250, 0.7) 30%,
-    rgba(250, 250, 250, 0.92) 100%);
-  backdrop-filter: blur(60px) saturate(200%) brightness(1.02);
-  -webkit-backdrop-filter: blur(60px) saturate(200%) brightness(1.02);
+    rgba(0, 0, 0, 0.0) 0%,
+    rgba(10, 10, 10, 0.4) 10%,
+    rgba(12, 12, 12, 0.8) 30%,
+    rgba(14, 14, 14, 0.95) 100%);
+  backdrop-filter: blur(80px) saturate(180%) brightness(0.6);
+  -webkit-backdrop-filter: blur(80px) saturate(180%) brightness(0.6);
   padding: 140px 36px 80px 32px;
   overflow-y: auto;
   overflow-x: hidden;
@@ -123,7 +125,7 @@ body {
   transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   opacity: 0;
   font-size: 10px;
-  color: rgba(0, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 0.2);
   background: none;
   border: none;
 }
@@ -135,7 +137,7 @@ body {
 .sidebar-toggle:hover {
   opacity: 0.6 !important;
   transform: translateX(-2px);
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .sidebar-nav {
@@ -146,7 +148,7 @@ body {
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.4);
   margin-bottom: 24px;
   text-transform: none;
   padding-left: 20px;
@@ -168,7 +170,7 @@ body {
   padding: 14px 24px 14px 20px;
   font-size: 13px;
   line-height: 1.5;
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.5);
   text-decoration: none;
   border-radius: 0;
   transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -180,14 +182,14 @@ body {
 }
 
 .sidebar-link:hover {
-  color: rgba(0, 0, 0, 0.7);
+  color: rgba(255, 255, 255, 0.8);
   padding-left: 24px;
   border-bottom-color: transparent;
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0.02) 0%, transparent 100%);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
 }
 
 .sidebar-link.active {
-  color: rgba(0, 0, 0, 0.85);
+  color: rgba(255, 255, 255, 0.95);
   font-weight: 500;
   letter-spacing: 0.01em;
 }
@@ -229,12 +231,12 @@ body {
 }
 
 .sidebar-right::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
 }
 
 .sidebar-right::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 /* Typography */
@@ -366,7 +368,7 @@ hr {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(0, 0, 0, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   z-index: 200;
@@ -507,9 +509,10 @@ hr {
   font-size: 15px;
   line-height: 1.4;
   font-family: var(--font-system);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 22px;
-  background: white;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
   resize: none;
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -519,13 +522,13 @@ hr {
 }
 
 .input-field::placeholder {
-  color: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.3);
   font-weight: 400;
 }
 
 .input-field:focus {
   border-color: var(--link);
-  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.15);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.2), 0 0 20px rgba(10, 132, 255, 0.1);
 }
 
 .submit-button {
@@ -536,7 +539,8 @@ hr {
   width: 36px;
   height: 36px;
   padding: 0;
-  background: var(--link);
+  background: linear-gradient(135deg, #0a84ff 0%, #0051d5 100%);
+  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
   color: white;
   border: none;
   border-radius: 50%;
@@ -550,7 +554,8 @@ hr {
 }
 
 .submit-button:hover:not(:disabled) {
-  background: #0051d5;
+  background: linear-gradient(135deg, #409cff 0%, #0a84ff 100%);
+  box-shadow: 0 4px 12px rgba(10, 132, 255, 0.4);
 }
 
 .submit-button:active {
@@ -558,7 +563,8 @@ hr {
 }
 
 .submit-button:disabled {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
@@ -596,7 +602,7 @@ hr {
   background: transparent;
   border-radius: 0;
   border: none;
-  border-bottom: 0.5px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.04);
   text-decoration: none;
   color: var(--text-primary);
   transition: opacity 0.15s ease, padding 0.15s ease;
