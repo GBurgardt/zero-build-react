@@ -5,7 +5,7 @@ export default function App() {
   // Constants
   const IDEA_ID_REGEX = /^\/zero\/idea\/([0-9a-fA-F]{24})(?:\/([^\/]+))?$/;
   const POLL_INTERVAL = 3000;
-  const MAX_INPUT_LENGTH = 280;
+  const MAX_INPUT_LENGTH = 999999; // Prácticamente infinito
   const SECTION_SLUG_MAX_LENGTH = 64;
   
   // State - Main input
@@ -44,7 +44,6 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
-  const remainingChars = MAX_INPUT_LENGTH - (input ? input.length : 0);
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -610,10 +609,7 @@ export default function App() {
         { className: "input-container" },
         React.createElement("textarea", {
           value: input,
-          onChange: (e) => {
-            const next = e.target.value.slice(0, MAX_INPUT_LENGTH);
-            setInput(next);
-          },
+          onChange: (e) => setInput(e.target.value),
           onKeyDown,
           rows: 4,
           placeholder: "Pegá un texto o escribí tu idea aquí...",
@@ -632,16 +628,7 @@ export default function App() {
             : "→"
         )
       ),
-      React.createElement(
-        "div",
-        { className: `input-hints` },
-        React.createElement(
-          "span",
-          { className: `char-counter ${remainingChars <= 20 ? (remainingChars <= 0 ? 'danger' : 'warning') : ''}`, "aria-live": "polite" },
-          `${remainingChars}`
-        ),
-        errorMsg ? React.createElement("div", { className: "error-elegant" }, errorMsg) : null
-      )
+      errorMsg && React.createElement("div", { className: "error-elegant", style: { marginTop: '8px' } }, errorMsg)
     ),
 
     // Ideas list

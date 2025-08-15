@@ -1009,21 +1009,17 @@ hr {
   opacity: 0.8;
 }
 
-/* Input hints */
-.input-hints {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* Error message styling */
+.error-elegant {
   max-width: 520px;
   margin: 8px auto 0;
-  min-height: 20px;
+  padding: 8px 12px;
+  background: rgba(255, 69, 58, 0.1);
+  border: 1px solid rgba(255, 69, 58, 0.2);
+  border-radius: 8px;
+  color: #ff453a;
+  font-size: 13px;
 }
-.char-counter {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-.char-counter.warning { color: var(--warning); }
-.char-counter.danger { color: var(--danger); }
 
 /* Accessibility helpers */
 .visually-hidden {
