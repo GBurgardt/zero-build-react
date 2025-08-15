@@ -207,7 +207,6 @@ export default function App() {
         // Save libraries
         if (marked) setMdLib(() => marked);
         if (DOMPurify?.sanitize) setPurifyLib(() => DOMPurify);
-        }
       } catch (err) {
         // Markdown libraries failed to load
       }
