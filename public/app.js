@@ -357,19 +357,84 @@ export default function App() {
     }
   }, [input, sending, selectedModel]);
 
+  const [generatingArticle, setGeneratingArticle] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
+  
   const generateFromIdea = React.useCallback(async (id) => {
     if (!id) return;
+    setGeneratingArticle(true);
+    setStreamingContent('');
+    
     const body = docType === 'article'
-      ? { model: selectedModel, language: 'es', mode: 'pete-komon', userDirection }
+      ? { model: selectedModel, language: 'es', mode: 'pete-komon', userDirection, stream: true }
       : { model: selectedModel, direction: userDirection };
     const path = docType === 'article'
       ? `/zero-api/ideas/${id}/generate-article`
       : `/zero-api/ideas/${id}/generate-pragmatic`;
-    const resp = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const data = await resp.json();
-    if (!resp.ok || data.error) throw new Error(data.detail || data.error || 'Error generando');
-    if (data.redirectUrl) {
-      window.location.href = data.redirectUrl;
+    
+    try {
+      // Use EventSource for streaming
+      const eventSource = new EventSource(`${path}?${new URLSearchParams({ 
+        ...body,
+        stream: 'true' 
+      })}`);
+      
+      // For POST with EventSource, we need to use fetch with a different approach
+      const resp = await fetch(path, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(body) 
+      });
+      
+      if (!resp.ok) {
+        const data = await resp.json();
+        throw new Error(data.detail || data.error || 'Error generando');
+      }
+      
+      // If streaming is supported in response
+      if (resp.headers.get('content-type')?.includes('text/event-stream')) {
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const text = decoder.decode(value);
+          const lines = text.split('\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.chunk) {
+                  setStreamingContent(prev => prev + data.chunk);
+                }
+                if (data.done && data.redirectUrl) {
+                  window.location.href = data.redirectUrl;
+                  return;
+                }
+                if (data.error) {
+                  throw new Error(data.detail || data.error || 'Error generando');
+                }
+              } catch (e) {
+                console.error('Error parsing SSE data:', e);
+              }
+            }
+          }
+        }
+      } else {
+        // Fallback to non-streaming response
+        const data = await resp.json();
+        if (data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+        }
+      }
+    } catch (e) {
+      alert(String(e?.message || e));
+    } finally {
+      setGeneratingArticle(false);
+      setStreamingContent('');
     }
   }, [docType, selectedModel, userDirection]);
 
@@ -624,8 +689,15 @@ export default function App() {
           React.createElement("textarea", { value: userDirection, onChange: (e) => setUserDirection(e.target.value), rows: 2, placeholder: "Dirección breve (opcional)", className: "input-field", "aria-label": "Dirección breve" }),
           React.createElement(
             "button",
-            { onClick: async () => { try { await generateFromIdea(route.ideaId); } catch (e) { alert(String(e?.message || e)); } }, className: "submit-button", title: "Crear" },
-            docType === 'article' ? 'Crear Artículo' : 'Crear Pragmático'
+            { 
+              onClick: async () => { try { await generateFromIdea(route.ideaId); } catch (e) { alert(String(e?.message || e)); } }, 
+              className: "submit-button", 
+              title: "Crear",
+              disabled: generatingArticle
+            },
+            generatingArticle 
+              ? React.createElement("span", null, "Generando...") 
+              : (docType === 'article' ? 'Crear Artículo' : 'Crear Pragmático')
           )
         )
       ),

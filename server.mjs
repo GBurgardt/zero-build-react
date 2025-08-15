@@ -488,6 +488,18 @@ async function handleGenerateArticle(req, res, ideaId) {
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
     const modelRaw = String(body.model || '').toLowerCase();
     const useClaude = modelRaw === 'claude' || modelRaw === 'claude-opus' || modelRaw.includes('claude');
+    const useStream = body.stream === true;
+    
+    // Setup SSE headers for streaming
+    if (useStream) {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+      });
+    }
+    
     const originalInput = String(thought.text || '');
     const fullExplanation = String(thought.result || thought.superinfo_raw || '');
     const ideaContent = `INPUT ORIGINAL:\n\n${originalInput}\n\nEXPLICACIÓN COMPLETA:\n\n${fullExplanation}`;
@@ -497,7 +509,19 @@ async function handleGenerateArticle(req, res, ideaId) {
     const language = body.language === 'en' ? 'en' : 'es';
     const mode = body.mode === 'german-burgart' ? 'german-burgart' : 'pete-komon';
     const userDirection = String(body.userDirection || '').slice(0, 4000);
-    const { article, fullResponse } = await invokerModule.invokeBlogAgent({ ideaContent, ideaId, language, mode, userDirection });
+    
+    let accumulatedContent = '';
+    const streamCallback = useStream ? (chunk) => {
+      accumulatedContent += chunk;
+      // Send SSE data
+      res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+    } : null;
+    
+    const { article, fullResponse } = await invokerModule.invokeBlogAgent(
+      { ideaContent, ideaId, language, mode, userDirection },
+      streamCallback
+    );
+    
     const content = String(article || '');
     const titleMatch = (content.match(/^#\s+(.+)$/m) || [])[1];
     const title = titleMatch || (originalInput || '').substring(0, 100) || 'Artículo';
@@ -513,10 +537,26 @@ async function handleGenerateArticle(req, res, ideaId) {
       raw: fullResponse,
       model: useClaude ? 'claude-opus' : 'gpt-5',
     });
-    return json(res, 200, { success: true, articleId: String(insertedId), redirectUrl: `/article/${String(insertedId)}` });
+    
+    if (useStream) {
+      // Send final event with article details
+      res.write(`data: ${JSON.stringify({ 
+        done: true, 
+        articleId: String(insertedId), 
+        redirectUrl: `/article/${String(insertedId)}` 
+      })}\n\n`);
+      res.end();
+    } else {
+      return json(res, 200, { success: true, articleId: String(insertedId), redirectUrl: `/article/${String(insertedId)}` });
+    }
   } catch (e) {
     console.error('[generate-article] ERROR', e);
-    return json(res, 500, { error: 'generation_failed', detail: String(e?.message || e) });
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ error: 'generation_failed', detail: String(e?.message || e) })}\n\n`);
+      res.end();
+    } else {
+      return json(res, 500, { error: 'generation_failed', detail: String(e?.message || e) });
+    }
   }
 }
 

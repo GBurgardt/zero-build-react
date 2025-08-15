@@ -19,11 +19,12 @@ const extractSection = (content, tagName) => {
   return match ? match[1].trim() : null;
 };
 
-const callGPT5 = async (messagesForApi, mode) => {
+const callGPT5 = async (messagesForApi, mode, streamCallback = null) => {
   const modelToUse = config.model;
   console.log("\n====================================================");
   console.log(`📡 CALLING GPT-5 API with model (${modelToUse})...`);
   console.log(`📝 Using mode: ${mode}`);
+  console.log(`📝 Streaming: ${!!streamCallback}`);
   console.log("====================================================\n");
   try {
     debug("🔧 Preparing messages for GPT-5 API call...");
@@ -50,29 +51,72 @@ DO NOT output any text outside of these tags. The response MUST start with <inte
       ...messages.map((msg) => ({ role: msg.role, content: [{ type: "input_text", text: msg.content }] })),
     ];
 
-    // @ts-ignore OpenAI Responses API
-    const response = await openai.responses.create({
-      model: modelToUse,
-      input: gpt5Input,
-      text: { format: { type: "text" }, verbosity: "medium" },
-      reasoning: { effort: "high", summary: "auto" },
-      tools: [],
-      store: true,
-      temperature: 1,
-      max_output_tokens: 16384,
-    });
+    // Convert messages for Chat Completions API
+    const chatMessages = [
+      { role: "system", content: enhancedSystemPrompt },
+      ...messages.map((msg) => ({ role: msg.role, content: msg.content }))
+    ];
+    
+    // If streaming is requested
+    if (streamCallback) {
+      const stream = await openai.chat.completions.create({
+        model: modelToUse,
+        messages: chatMessages,
+        temperature: 1,
+        max_tokens: 16384,
+        stream: true,
+      });
 
-    const responseText = response.output_text || (response.output && response.output[0]?.content?.[0]?.text) || "";
-    return { choices: [{ message: { role: "assistant", content: responseText } }] };
+      let fullContent = "";
+      for await (const chunk of stream) {
+        const chunkText = chunk.choices[0]?.delta?.content || "";
+        fullContent += chunkText;
+        if (streamCallback && chunkText) {
+          await streamCallback(chunkText);
+        }
+      }
+
+      return { choices: [{ message: { role: "assistant", content: fullContent } }] };
+    } else {
+      // Non-streaming version - try Responses API first, fallback to Chat Completions
+      try {
+        // @ts-ignore OpenAI Responses API
+        const response = await openai.responses.create({
+          model: modelToUse,
+          input: gpt5Input,
+          text: { format: { type: "text" }, verbosity: "medium" },
+          reasoning: { effort: "high", summary: "auto" },
+          tools: [],
+          store: true,
+          temperature: 1,
+          max_output_tokens: 16384,
+        });
+
+        const responseText = response.output_text || (response.output && response.output[0]?.content?.[0]?.text) || "";
+        return { choices: [{ message: { role: "assistant", content: responseText } }] };
+      } catch (error) {
+        // Fallback to Chat Completions API if Responses API fails
+        console.log("Responses API failed, falling back to Chat Completions API");
+        const response = await openai.chat.completions.create({
+          model: modelToUse,
+          messages: chatMessages,
+          temperature: 1,
+          max_tokens: 16384,
+        });
+        
+        return { choices: [{ message: response.choices[0].message }] };
+      }
+    }
   } catch (error) {
     console.error("\n❌ ERROR IN GPT-5 API CALL", error?.message || error);
     throw error;
   }
 };
 
-export async function invokeBlogAgent(inputs) {
+export async function invokeBlogAgent(inputs, streamCallback = null) {
   console.log("\n====================================================");
   console.log("📝 BLOG ARTICLE AGENT (GPT-5) INVOCATION STARTED");
+  console.log(`📝 Streaming enabled: ${!!streamCallback}`);
   console.log("====================================================\n");
 
   const conversationId = `blog-article-${inputs.ideaId || uuidv4()}`;
@@ -152,7 +196,7 @@ The entire response, including the internal monologue and blog article, must be 
     memory.addMessage(conversationId, { role: "user", content: userMessageContent });
     const messages = memory.getMessages(conversationId);
 
-    const llmResponse = await callGPT5(messages, mode);
+    const llmResponse = await callGPT5(messages, mode, streamCallback);
     const assistantMessage = llmResponse.choices?.[0]?.message;
     if (!assistantMessage?.content) {
       return {
