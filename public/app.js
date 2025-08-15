@@ -205,10 +205,19 @@ export default function App() {
             if (streamData.chunk) {
               console.log('[Article] Appending chunk of', streamData.chunk.length, 'chars');
               // Append new content
-              setArticle(prev => ({
-                ...prev,
-                content: prev.content + streamData.chunk
-              }));
+              setArticle(prev => {
+                let newContent = prev.content + streamData.chunk;
+                // Remove internal_monologue tags if present
+                newContent = newContent.replace(/<internal_monologue>[\s\S]*?<\/internal_monologue>\s*/g, '');
+                // Remove blog_article opening tag
+                newContent = newContent.replace(/<blog_article>\s*/g, '');
+                // Remove blog_article closing tag
+                newContent = newContent.replace(/\s*<\/blog_article>/g, '');
+                return {
+                  ...prev,
+                  content: newContent
+                };
+              });
             }
             
             if (streamData.title && streamData.title !== 'Generando artículo...') {
