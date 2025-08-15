@@ -19,6 +19,71 @@ REMOTE_DIR="/home/ec2-user/zero-build-react"
 echo -e "${GREEN}🚀 Zero-Build Deploy${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# Verificar sintaxis de JavaScript
+echo "• Verificando sintaxis de JavaScript..."
+ERRORS_FOUND=false
+
+# Verificar app.js
+if [ -f "public/app.js" ]; then
+  if ! node -c "public/app.js" 2>/dev/null; then
+    echo -e "${RED}✗ Error de sintaxis en public/app.js:${NC}"
+    node -c "public/app.js" 2>&1 | head -10
+    ERRORS_FOUND=true
+  fi
+fi
+
+# Verificar server.mjs
+if [ -f "server.mjs" ]; then
+  if ! node -c "server.mjs" 2>/dev/null; then
+    echo -e "${RED}✗ Error de sintaxis en server.mjs:${NC}"
+    node -c "server.mjs" 2>&1 | head -10
+    ERRORS_FOUND=true
+  fi
+fi
+
+# Verificar todos los archivos .js y .mjs en el proyecto
+for file in $(find . -name "*.js" -o -name "*.mjs" | grep -v node_modules | grep -v ".git"); do
+  if ! node -c "$file" 2>/dev/null; then
+    echo -e "${RED}✗ Error de sintaxis en $file${NC}"
+    ERRORS_FOUND=true
+  fi
+done
+
+# Verificar archivos JSON
+for file in $(find . -name "*.json" | grep -v node_modules | grep -v ".git"); do
+  if ! python3 -m json.tool "$file" >/dev/null 2>&1; then
+    echo -e "${RED}✗ Error de sintaxis JSON en $file${NC}"
+    ERRORS_FOUND=true
+  fi
+done
+
+# Verificar archivos CSS (sintaxis básica)
+for file in $(find . -name "*.css" | grep -v node_modules | grep -v ".git"); do
+  # Verificar paréntesis y llaves balanceadas
+  if ! awk 'BEGIN{b=0;p=0} 
+    {gsub(/\/\*.*\*\//,""); gsub(/\/\/.*/,"")} 
+    {for(i=1;i<=length($0);i++) {
+      c=substr($0,i,1);
+      if(c=="{") b++;
+      if(c=="}") b--;
+      if(c=="(") p++;
+      if(c==")") p--;
+    }}
+    END{if(b!=0 || p!=0) exit 1}' "$file" 2>/dev/null; then
+    echo -e "${RED}✗ Posible error de sintaxis CSS en $file (llaves o paréntesis desbalanceados)${NC}"
+    ERRORS_FOUND=true
+  fi
+done
+
+# Si hay errores, detener el deploy
+if [ "$ERRORS_FOUND" = true ]; then
+  echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${RED}✗ Deploy cancelado: Arreglá los errores de sintaxis primero${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✓ Sintaxis verificada correctamente${NC}"
+
 # Verificar branch
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [ "$CURRENT_BRANCH" != "main" ]; then
