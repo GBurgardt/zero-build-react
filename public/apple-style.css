@@ -43,6 +43,8 @@
   --transition-fast: 150ms ease;
   --transition-base: 250ms ease;
   --transition-slow: 350ms ease;
+  --danger: #ff453a;
+  --warning: #ffd60a;
 }
 
 /* Base */
@@ -607,6 +609,54 @@ hr {
   animation: fadeInContent 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Copy button refined */
+.copy-button {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  font-family: var(--font-system);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.7;
+  z-index: 10;
+}
+.copy-button:hover { opacity: 1; }
+.copy-button.copied {
+  background: rgba(50, 215, 75, 0.15);
+  border-color: rgba(50, 215, 75, 0.3);
+  color: var(--accent-green);
+}
+
+/* Share button aligned with copy button */
+.share-button {
+  position: absolute;
+  top: 16px;
+  right: 102px; /* place left of copy button */
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  font-family: var(--font-system);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.7;
+  z-index: 10;
+}
+.share-button:hover { opacity: 1; }
+.share-button.shared {
+  background: rgba(10, 132, 255, 0.15);
+  border-color: rgba(10, 132, 255, 0.3);
+  color: var(--link);
+}
+
 @keyframes fadeInContent {
   from {
     opacity: 0;
@@ -833,6 +883,20 @@ hr {
   cursor: not-allowed;
 }
 
+/* Spinner inside submit button */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Ideas list */
 .ideas-grid {
   display: none;
@@ -943,6 +1007,31 @@ hr {
   margin-right: 8px;
   vertical-align: middle;
   opacity: 0.8;
+}
+
+/* Input hints */
+.input-hints {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 520px;
+  margin: 8px auto 0;
+  min-height: 20px;
+}
+.char-counter {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.char-counter.warning { color: var(--warning); }
+.char-counter.danger { color: var(--danger); }
+
+/* Accessibility helpers */
+.visually-hidden {
+  position: absolute !important;
+  height: 1px; width: 1px;
+  overflow: hidden;
+  clip: rect(1px, 1px, 1px, 1px);
+  white-space: nowrap;
 }
 
 /* Responsive */

@@ -43,6 +43,8 @@ export default function App() {
   // State - UI
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [shareSuccess, setShareSuccess] = useState(false);
+  const remainingChars = MAX_INPUT_LENGTH - (input ? input.length : 0);
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -215,6 +217,17 @@ export default function App() {
     };
     loadMarkdownLibs();
   }, []);
+
+  // Persist model selection
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('zero:selectedModel');
+      if (stored) setSelectedModel(stored);
+    } catch (_) {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem('zero:selectedModel', selectedModel); } catch (_) {}
+  }, [selectedModel]);
 
   const htmlContent = React.useMemo(() => {
     if (!mdLib || !purifyLib || !currentContent) return null;
@@ -389,6 +402,53 @@ export default function App() {
     }
   }, [currentContent]);
 
+  // Share handler (Web Share API + clipboard fallback)
+  const handleShare = React.useCallback(async () => {
+    try {
+      const url = window.location.href;
+      const title = mainTitle || 'Idea';
+      if (navigator.share) {
+        await navigator.share({ title, url });
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      }
+      setShareSuccess(true);
+      setTimeout(() => setShareSuccess(false), 2000);
+    } catch (_) {
+      // Silencio si el usuario cancela
+    }
+  }, [mainTitle]);
+
+  // Scroll al inicio cuando cambia la sección
+  useEffect(() => {
+    if (route.mode === 'detail' && route.section) {
+      const el = document.querySelector('.content-section');
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  }, [route.mode, route.section]);
+
+  // Atajos de teclado para copiar/compartir en detalle
+  useEffect(() => {
+    if (route.mode !== 'detail') return;
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') return; // reservado para sidebar
+      if ((e.key === 'c' || e.key === 'C') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        handleCopy();
+      }
+      if ((e.key === 's' || e.key === 'S') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        handleShare();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [route.mode, handleCopy, handleShare]);
+
   // Views
   if (route.mode === "detail") {
     
@@ -430,28 +490,21 @@ export default function App() {
                 "button",
                 {
                   onClick: handleCopy,
-                  className: "copy-button",
+                  className: `copy-button ${copySuccess ? 'copied' : ''}`,
                   title: "Copiar contenido",
-                  style: {
-                    position: 'absolute',
-                    top: '16px',
-                    right: '16px',
-                    padding: '8px 12px',
-                    background: copySuccess ? 'rgba(50, 215, 75, 0.15)' : 'rgba(255, 255, 255, 0.04)',
-                    border: `1px solid ${copySuccess ? 'rgba(50, 215, 75, 0.3)' : 'rgba(255, 255, 255, 0.08)'}`,
-                    borderRadius: '8px',
-                    color: copySuccess ? '#32d74b' : 'rgba(255, 255, 255, 0.5)',
-                    fontSize: '13px',
-                    fontFamily: 'var(--font-system)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    opacity: 0.6,
-                    zIndex: 10
-                  },
-                  onMouseEnter: (e) => { e.target.style.opacity = '1'; },
-                  onMouseLeave: (e) => { if (!copySuccess) e.target.style.opacity = '0.6'; }
+                  'aria-live': 'polite',
                 },
                 copySuccess ? "✓ Copiado" : "Copiar"
+              ),
+              // Share button
+              React.createElement(
+                "button",
+                {
+                  onClick: handleShare,
+                  className: `share-button ${shareSuccess ? 'shared' : ''}`,
+                  title: "Compartir enlace",
+                },
+                shareSuccess ? "✓ Listo" : "Compartir"
               ),
               // Content
               htmlContent
@@ -526,14 +579,25 @@ export default function App() {
       "div",
       { className: "model-selector" },
       React.createElement(
-        "select",
-        {
-          value: selectedModel,
-          onChange: (e) => setSelectedModel(e.target.value),
-          className: "model-dropdown"
-        },
-        React.createElement("option", { value: "gpt-5" }, "GPT-5"),
-        React.createElement("option", { value: "claude-opus" }, "Claude Opus 4.1")
+        React.Fragment,
+        null,
+        React.createElement(
+          "label",
+          { htmlFor: "model-select", className: "visually-hidden" },
+          "Modelo"
+        ),
+        React.createElement(
+          "select",
+          {
+            id: "model-select",
+            value: selectedModel,
+            onChange: (e) => setSelectedModel(e.target.value),
+            className: "model-dropdown",
+            "aria-label": "Seleccionar modelo"
+          },
+          React.createElement("option", { value: "gpt-5" }, "GPT-5"),
+          React.createElement("option", { value: "claude-opus" }, "Claude Opus 4.1")
+        )
       )
     ),
 
@@ -546,7 +610,10 @@ export default function App() {
         { className: "input-container" },
         React.createElement("textarea", {
           value: input,
-          onChange: (e) => setInput(e.target.value),
+          onChange: (e) => {
+            const next = e.target.value.slice(0, MAX_INPUT_LENGTH);
+            setInput(next);
+          },
           onKeyDown,
           rows: 4,
           placeholder: "Pegá un texto o escribí tu idea aquí...",
@@ -560,10 +627,21 @@ export default function App() {
             className: "submit-button", 
             title: "Enviar (Enter)" 
           },
-          sending ? "..." : "→"
+          sending 
+            ? React.createElement("span", { className: "spinner", "aria-hidden": true }) 
+            : "→"
         )
       ),
-      errorMsg ? React.createElement("div", { className: "error-elegant" }, errorMsg) : null
+      React.createElement(
+        "div",
+        { className: `input-hints` },
+        React.createElement(
+          "span",
+          { className: `char-counter ${remainingChars <= 20 ? (remainingChars <= 0 ? 'danger' : 'warning') : ''}`, "aria-live": "polite" },
+          `${remainingChars}`
+        ),
+        errorMsg ? React.createElement("div", { className: "error-elegant" }, errorMsg) : null
+      )
     ),
 
     // Ideas list
