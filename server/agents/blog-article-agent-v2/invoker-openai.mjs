@@ -59,13 +59,21 @@ DO NOT output any text outside of these tags. The response MUST start with <inte
     
     // If streaming is requested
     if (streamCallback) {
-      const stream = await openai.chat.completions.create({
+      const completionParams = {
         model: modelToUse,
         messages: chatMessages,
         temperature: 1,
-        max_tokens: 16384,
         stream: true,
-      });
+      };
+      
+      // Use max_completion_tokens for GPT-5, max_tokens for others
+      if (modelToUse.includes('gpt-5')) {
+        completionParams.max_completion_tokens = 16384;
+      } else {
+        completionParams.max_tokens = 16384;
+      }
+      
+      const stream = await openai.chat.completions.create(completionParams);
 
       let fullContent = "";
       for await (const chunk of stream) {
@@ -97,12 +105,20 @@ DO NOT output any text outside of these tags. The response MUST start with <inte
       } catch (error) {
         // Fallback to Chat Completions API if Responses API fails
         console.log("Responses API failed, falling back to Chat Completions API");
-        const response = await openai.chat.completions.create({
+        const completionParams = {
           model: modelToUse,
           messages: chatMessages,
           temperature: 1,
-          max_tokens: 16384,
-        });
+        };
+        
+        // Use max_completion_tokens for GPT-5, max_tokens for others
+        if (modelToUse.includes('gpt-5')) {
+          completionParams.max_completion_tokens = 16384;
+        } else {
+          completionParams.max_tokens = 16384;
+        }
+        
+        const response = await openai.chat.completions.create(completionParams);
         
         return { choices: [{ message: response.choices[0].message }] };
       }
