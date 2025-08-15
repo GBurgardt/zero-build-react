@@ -15,9 +15,10 @@ const extractSection = (content, tagName) => {
   return match ? match[1].trim() : null;
 };
 
-export async function invokeBlogAgent(inputs) {
+export async function invokeBlogAgent(inputs, streamCallback = null) {
   console.log("\n====================================================");
   console.log("📝 BLOG ARTICLE AGENT INVOCATION STARTED");
+  console.log("📝 Streaming enabled:", !!streamCallback);
   console.log("====================================================\n");
 
   const conversationId = `blog-article-${inputs.ideaId || uuidv4()}`;
@@ -50,15 +51,40 @@ export async function invokeBlogAgent(inputs) {
     memory.addMessage(conversationId, { role: "user", content: userMessageContent });
     const messages = messageBuilder.buildMessages(memory.getMessages(conversationId));
 
-    const response = await anthropic.messages.create({
-      model: config.model,
-      max_tokens: 32000,
-      temperature: 1,
-      system: config.getSystemPrompt(mode),
-      messages,
-    });
+    let responseText = "";
+    
+    // If streaming is requested
+    if (streamCallback) {
+      console.log("[Claude] Streaming mode enabled");
+      const stream = await anthropic.messages.create({
+        model: config.model,
+        max_tokens: 32000,
+        temperature: 1,
+        system: config.getSystemPrompt(mode),
+        messages,
+        stream: true,
+      });
+      
+      for await (const chunk of stream) {
+        if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
+          const chunkText = chunk.delta.text;
+          responseText += chunkText;
+          await streamCallback(chunkText);
+        }
+      }
+    } else {
+      // Non-streaming version
+      console.log("[Claude] Non-streaming mode");
+      const response = await anthropic.messages.create({
+        model: config.model,
+        max_tokens: 32000,
+        temperature: 1,
+        system: config.getSystemPrompt(mode),
+        messages,
+      });
+      responseText = response.content?.[0]?.type === "text" ? response.content[0].text : "";
+    }
 
-    const responseText = response.content?.[0]?.type === "text" ? response.content[0].text : "";
     if (!responseText) {
       return {
         fullResponse: "<internal_monologue>Error: Empty response.</internal_monologue><blog_article>Error: Empty response.</blog_article>",
