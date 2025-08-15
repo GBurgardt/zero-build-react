@@ -57,6 +57,8 @@ console.log('[startup] Anthropic client initialized:', !!anthropic);
 
 let mongoClient;
 let ideasCollection;
+let blogArticlesCollection;
+let pragmaticDocsCollection;
 
 async function getDb() {
   if (!mongoClient) {
@@ -66,8 +68,13 @@ async function getDb() {
     const db = mongoClient.db(dbName);
     ideasCollection = db.collection('ideas');
     try { await ideasCollection.createIndex({ createdAt: -1 }); } catch (_) {}
+    blogArticlesCollection = db.collection('blog_articles');
+    pragmaticDocsCollection = db.collection('pragmatic_docs');
+    try { await blogArticlesCollection.createIndex({ createdAt: -1 }); } catch (_) {}
+    try { await pragmaticDocsCollection.createIndex({ createdAt: -1 }); } catch (_) {}
+    try { await pragmaticDocsCollection.createIndex({ title: 'text', contentMarkdown: 'text' }); } catch (_) {}
   }
-  return { ideas: ideasCollection };
+  return { ideas: ideasCollection, blogArticles: blogArticlesCollection, pragmaticDocs: pragmaticDocsCollection };
 }
 
 if (!OPENAI_API_KEY) {
@@ -438,6 +445,119 @@ async function handleListIdeas(req, res) {
   }
 }
 
+// ===== New handlers: Article/Pragmatic generation and readers =====
+async function handleGenerateArticle(req, res, ideaId) {
+  try {
+    const { ideas, blogArticles } = await getDb();
+    const _id = new ObjectId(ideaId);
+    const thought = await ideas.findOne({ _id });
+    if (!thought) return json(res, 404, { error: 'idea_not_found' });
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    const modelRaw = String(body.model || '').toLowerCase();
+    const useClaude = modelRaw === 'claude' || modelRaw === 'claude-opus' || modelRaw.includes('claude');
+    const originalInput = String(thought.text || '');
+    const fullExplanation = String(thought.result || thought.superinfo_raw || '');
+    const ideaContent = `INPUT ORIGINAL:\n\n${originalInput}\n\nEXPLICACIÓN COMPLETA:\n\n${fullExplanation}`;
+    const invokerModule = useClaude
+      ? await import('./server/agents/blog-article-agent-v2/invoker.mjs')
+      : await import('./server/agents/blog-article-agent-v2/invoker-openai.mjs');
+    const language = body.language === 'en' ? 'en' : 'es';
+    const mode = body.mode === 'german-burgart' ? 'german-burgart' : 'pete-komon';
+    const userDirection = String(body.userDirection || '').slice(0, 4000);
+    const { article, fullResponse } = await invokerModule.invokeBlogAgent({ ideaContent, ideaId, language, mode, userDirection });
+    const content = String(article || '');
+    const titleMatch = (content.match(/^#\s+(.+)$/m) || [])[1];
+    const title = titleMatch || (originalInput || '').substring(0, 100) || 'Artículo';
+    const now = new Date();
+    const { insertedId } = await blogArticles.insertOne({
+      sourceIdeaId: _id,
+      title,
+      content,
+      language,
+      status: 'draft',
+      createdAt: now,
+      updatedAt: now,
+      raw: fullResponse,
+      model: useClaude ? 'claude-opus' : 'gpt-5',
+    });
+    return json(res, 200, { success: true, articleId: String(insertedId), redirectUrl: `/article/${String(insertedId)}` });
+  } catch (e) {
+    console.error('[generate-article] ERROR', e);
+    return json(res, 500, { error: 'generation_failed', detail: String(e?.message || e) });
+  }
+}
+
+async function handleGeneratePragmatic(req, res, ideaId) {
+  try {
+    const { ideas, pragmaticDocs } = await getDb();
+    const _id = new ObjectId(ideaId);
+    const thought = await ideas.findOne({ _id });
+    if (!thought) return json(res, 404, { error: 'idea_not_found' });
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    const modelRaw = String(body.model || '').toLowerCase();
+    const useClaude = modelRaw === 'claude' || modelRaw === 'claude-opus' || modelRaw.includes('claude');
+    const ideaContent = String(thought.result || thought.superinfo_raw || thought.text || '');
+    const direction = String(body.direction || '').slice(0, 4000);
+    const pragmaticConfig = (await import('./server/agents/pragmatic-doc-agent/config-openai.mjs')).default;
+    const sp = pragmaticConfig.getSystemPrompt();
+    const m = sp.match(/<<<<[\s\S]*>>>>/);
+    const oneShot = m ? m[0].replace(/^<<<<\n?|\n?>>>>$/g, '').trim() : '';
+    const invoker = useClaude
+      ? (await import('./server/agents/pragmatic-doc-agent/invoker.mjs')).invokePragmaticDocClaude
+      : (await import('./server/agents/pragmatic-doc-agent/invoker-openai.mjs')).invokePragmaticDocOpenAI;
+    const resp = await invoker({ ideaContent, direction, oneShot });
+    const now = new Date();
+    let jsonObj = null;
+    if (resp.json) { try { jsonObj = JSON.parse(resp.json); } catch { jsonObj = resp.json; } }
+    const h1 = (resp.document || '').match(/^#\s+(.+)$/m);
+    const title = h1?.[1]?.trim() || (thought.text || '').substring(0, 80) || 'Documento pragmático';
+    const { insertedId } = await pragmaticDocs.insertOne({
+      sourceIdeaId: _id,
+      title,
+      contentMarkdown: resp.document || resp.fullResponse || '',
+      contentJson: jsonObj,
+      isPublished: false,
+      tags: [],
+      status: 'draft',
+      createdAt: now,
+      updatedAt: now,
+      raw: resp.fullResponse,
+      model: useClaude ? 'claude-opus' : 'gpt-5',
+    });
+    return json(res, 200, { success: true, docId: String(insertedId), redirectUrl: `/pragmatic/${String(insertedId)}` });
+  } catch (e) {
+    console.error('[generate-pragmatic] ERROR', e);
+    return json(res, 500, { error: 'generation_failed', detail: String(e?.message || e) });
+  }
+}
+
+async function handleGetArticle(req, res, articleId) {
+  try {
+    const { blogArticles } = await getDb();
+    const _id = new ObjectId(articleId);
+    const doc = await blogArticles.findOne({ _id });
+    if (!doc) return json(res, 404, { error: 'not_found' });
+    return json(res, 200, { _id: String(doc._id), title: doc.title, content: doc.content, language: doc.language, status: doc.status, createdAt: doc.createdAt, updatedAt: doc.updatedAt });
+  } catch (e) {
+    return json(res, 500, { error: 'server_error', detail: String(e?.message || e) });
+  }
+}
+
+async function handleGetPragmatic(req, res, docId) {
+  try {
+    const { pragmaticDocs } = await getDb();
+    const _id = new ObjectId(docId);
+    const doc = await pragmaticDocs.findOne({ _id });
+    if (!doc) return json(res, 404, { error: 'not_found' });
+    return json(res, 200, { _id: String(doc._id), title: doc.title, contentMarkdown: doc.contentMarkdown, contentJson: doc.contentJson, status: doc.status, model: doc.model, createdAt: doc.createdAt, updatedAt: doc.updatedAt });
+  } catch (e) {
+    return json(res, 500, { error: 'server_error', detail: String(e?.message || e) });
+  }
+}
 async function callOpenAIChat(model, messages, temperature = 0.7) {
   if (typeof fetch === 'function') {
     return fetch('https://api.openai.com/v1/chat/completions', {
@@ -487,6 +607,17 @@ const server = http.createServer(async (req, res) => {
   let ideaMatch = url.pathname.match(/^\/zero-api\/ideas\/(\w{24})$/);
   if (!ideaMatch) ideaMatch = url.pathname.match(/^\/ideas\/(\w{24})$/);
   if (req.method === 'GET' && ideaMatch) return handleIdeaStatus(req, res, ideaMatch[1]);
+  // Generation endpoints
+  const genArticle = url.pathname.match(/^\/(?:zero-api\/)?ideas\/(\w{24})\/generate-article$/);
+  if (req.method === 'POST' && genArticle) return handleGenerateArticle(req, res, genArticle[1]);
+  const genPrag = url.pathname.match(/^\/(?:zero-api\/)?ideas\/(\w{24})\/generate-pragmatic$/);
+  if (req.method === 'POST' && genPrag) return handleGeneratePragmatic(req, res, genPrag[1]);
+
+  // Readers
+  const artGet = url.pathname.match(/^\/(?:zero-api\/)?article\/(\w{24})$/);
+  if (req.method === 'GET' && artGet) return handleGetArticle(req, res, artGet[1]);
+  const pragGet = url.pathname.match(/^\/(?:zero-api\/)?pragmatic\/(\w{24})$/);
+  if (req.method === 'GET' && pragGet) return handleGetPragmatic(req, res, pragGet[1]);
   // Full payload for detail view
   const ideaFull = url.pathname.match(/^\/(?:zero-api\/)?ideas\/(\w{24})\/full$/);
   if (req.method === 'GET' && ideaFull) {

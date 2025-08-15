@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Documento Pragmático</title>
+    <link rel="stylesheet" href="/apple-style.css"/>
+  </head>
+  <body>
+    <div id="root" class="reading-container fade-in" style="max-width: 880px; margin: 40px auto;">
+      <a href="/zero" class="back-link">← Volver</a>
+      <h1 id="title" class="main-doc-title" style="margin-top: 16px;">Documento</h1>
+      <div id="content" class="md" style="margin-top: 16px;"></div>
+      <h3>JSON</h3>
+      <pre id="json" class="md" style="background:#f7f7f7; padding:12px; border-radius:8px; overflow:auto"></pre>
+    </div>
+    <script>
+      (async function(){
+        try {
+          const m = location.pathname.match(/\/pragmatic\/(\w{24})/);
+          if (!m) return;
+          const r = await fetch('/zero-api/pragmatic/' + m[1]);
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.error || 'not_found');
+          document.getElementById('title').textContent = data.title || 'Documento pragmático';
+          const md = String(data.contentMarkdown || '');
+          const render = (s) => s
+            .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
+            .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+            .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/\n/g, '<br/>');
+          document.getElementById('content').innerHTML = render(md);
+          const jsonNode = document.getElementById('json');
+          if (data.contentJson) {
+            const jp = typeof data.contentJson === 'string' ? data.contentJson : JSON.stringify(data.contentJson, null, 2);
+            jsonNode.textContent = jp;
+          } else {
+            jsonNode.textContent = '(sin JSON)';
+          }
+        } catch(e) {
+          document.getElementById('content').innerHTML = '<pre>' + (e.message || String(e)) + '</pre>';
+        }
+      })();
+    </script>
+  </body>
+</html>

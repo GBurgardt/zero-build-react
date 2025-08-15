@@ -57,6 +57,23 @@ for file in $(find . -name "*.json" | grep -v node_modules | grep -v ".git"); do
   fi
 done
 
+# Verificar archivos CSS (sintaxis básica)
+for file in $(find . -name "*.css" | grep -v node_modules | grep -v ".git"); do
+  # Verificar paréntesis y llaves balanceadas
+  if ! awk 'BEGIN{b=0;p=0} 
+    {gsub(/\/\*.*\*\//,""); gsub(/\/\/.*/,"")} 
+    {for(i=1;i<=length($0);i++) {
+      c=substr($0,i,1);
+      if(c=="{") b++;
+      if(c=="}") b--;
+      if(c=="(") p++;
+      if(c==")") p--;
+    }}
+    END{if(b!=0 || p!=0) exit 1}' "$file" 2>/dev/null; then
+    echo -e "${RED}✗ Posible error de sintaxis CSS en $file (llaves o paréntesis desbalanceados)${NC}"
+    ERRORS_FOUND=true
+  fi
+done
 
 # Si hay errores, detener el deploy
 if [ "$ERRORS_FOUND" = true ]; then

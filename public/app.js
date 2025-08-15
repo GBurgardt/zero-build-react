@@ -13,6 +13,8 @@ export default function App() {
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [selectedModel, setSelectedModel] = useState("gpt-5");
+  const [docType, setDocType] = useState("article"); // 'article' | 'pragmatic'
+  const [userDirection, setUserDirection] = useState("");
 
   // State - Ideas list
   const [ideas, setIdeas] = useState([]);
@@ -222,11 +224,16 @@ export default function App() {
     try {
       const stored = localStorage.getItem('zero:selectedModel');
       if (stored) setSelectedModel(stored);
+      const dt = localStorage.getItem('zero:docType');
+      if (dt) setDocType(dt);
     } catch (_) {}
   }, []);
   useEffect(() => {
     try { localStorage.setItem('zero:selectedModel', selectedModel); } catch (_) {}
   }, [selectedModel]);
+  useEffect(() => {
+    try { localStorage.setItem('zero:docType', docType); } catch (_) {}
+  }, [docType]);
 
   const htmlContent = React.useMemo(() => {
     if (!mdLib || !purifyLib || !currentContent) return null;
@@ -331,6 +338,22 @@ export default function App() {
       setSending(false);
     }
   }, [input, sending, selectedModel]);
+
+  const generateFromIdea = React.useCallback(async (id) => {
+    if (!id) return;
+    const body = docType === 'article'
+      ? { model: selectedModel, language: 'es', mode: 'pete-komon', userDirection }
+      : { model: selectedModel, direction: userDirection };
+    const path = docType === 'article'
+      ? `/zero-api/ideas/${id}/generate-article`
+      : `/zero-api/ideas/${id}/generate-pragmatic`;
+    const resp = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.detail || data.error || 'Error generando');
+    if (data.redirectUrl) {
+      window.location.href = data.redirectUrl;
+    }
+  }, [docType, selectedModel, userDirection]);
 
   const onKeyDown = React.useCallback((e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -611,37 +634,73 @@ export default function App() {
       React.createElement("p", { className: "home-subtitle" }, "Process and analyze ideas to turn them into knowledge")
     ),
 
-    // Composer (model + textarea + send)
+    // Composer - Perfected layout with Jobs-inspired hierarchy
     React.createElement(
       "div",
       { className: "composer" },
+      // Model selectors - now stacked for better visual flow
       React.createElement(
-        React.Fragment,
-        null,
+        "div",
+        { className: "composer-controls" },
         React.createElement(
-          "label",
-          { htmlFor: "model-select", className: "visually-hidden" },
-          "Model"
-        ),
-        React.createElement(
-          "select",
-          {
-            id: "model-select",
-            value: selectedModel,
-            onChange: (e) => setSelectedModel(e.target.value),
-            className: "model-dropdown",
-            "aria-label": "Select model"
-          },
-          React.createElement("option", { value: "gpt-5" }, "GPT-5"),
-          React.createElement("option", { value: "claude-opus" }, "Claude Opus 4.1")
-        ),
+          "div",
+          { className: "composer-controls-row" },
+          React.createElement(
+            "div",
+            null,
+            React.createElement(
+              "label",
+              { htmlFor: "model-select", className: "model-selector-label" },
+              "AI Model"
+            ),
+            React.createElement(
+              "select",
+              {
+                id: "model-select",
+                value: selectedModel,
+                onChange: (e) => setSelectedModel(e.target.value),
+                className: "model-dropdown",
+                "aria-label": "Select AI model"
+              },
+              React.createElement("option", { value: "gpt-5" }, "GPT-5"),
+              React.createElement("option", { value: "claude-opus" }, "Claude Opus 4.1")
+            )
+          ),
+          React.createElement(
+            "div",
+            null,
+            React.createElement(
+              "label",
+              { htmlFor: "doctype-select", className: "model-selector-label" },
+              "Document Type"
+            ),
+            React.createElement(
+              "select",
+              {
+                id: "doctype-select",
+                value: docType,
+                onChange: (e) => setDocType(e.target.value),
+                className: "model-dropdown",
+                "aria-label": "Select document type"
+              },
+              React.createElement("option", { value: "article" }, "Article"),
+              React.createElement("option", { value: "pragmatic" }, "Pragmatic")
+            )
+          )
+        )
+      ),
+      // Main input area - now the protagonist
+      React.createElement(
+        "div",
+        { className: "composer-main" },
         React.createElement("textarea", {
           value: input,
           onChange: (e) => setInput(e.target.value),
           onKeyDown,
           rows: 5,
-          placeholder: "Paste text or type your idea here...",
-          className: "input-field"
+          placeholder: "Paste text or describe your idea here...",
+          className: "input-field",
+          "aria-label": "Enter your idea"
         }),
         React.createElement(
           "button",
@@ -649,11 +708,55 @@ export default function App() {
             onClick: onSubmit, 
             disabled: sending || !input.trim(), 
             className: "submit-button", 
-            title: "Send (Enter)" 
+            title: "Send (Enter)",
+            "aria-label": "Send idea"
           },
           sending 
             ? React.createElement("span", { className: "spinner", "aria-hidden": true }) 
-            : "→"
+            : React.createElement("span", null, "Process Idea →")
+        )
+      )
+    ),
+    // Direction input and create buttons - matching the refined style
+    React.createElement(
+      "div",
+      { className: "composer", style: { marginTop: -32 } },
+      React.createElement(
+        "div",
+        { className: "composer-main" },
+        React.createElement("textarea", {
+          value: userDirection,
+          onChange: (e) => setUserDirection(e.target.value),
+          rows: 3,
+          placeholder: "Optional: Add specific directions or angle for the document",
+          className: "input-field",
+          style: { minHeight: '80px' },
+          "aria-label": "Document direction"
+        }),
+        React.createElement(
+          "button",
+          {
+            onClick: async () => {
+              try {
+                // Take the first ready idea or create a new one if none
+                const first = ideas[0];
+                if (!first) {
+                  alert('Please create an idea first.');
+                  return;
+                }
+                await generateFromIdea(first.id);
+              } catch (e) {
+                alert(String(e?.message || e));
+              }
+            },
+            className: "submit-button",
+            style: { height: '44px' },
+            title: "Generate Document",
+            "aria-label": "Generate Document"
+          },
+          React.createElement("span", null, 
+            docType === 'article' ? 'Generate Article →' : 'Generate Pragmatic →'
+          )
         )
       )
     ),
