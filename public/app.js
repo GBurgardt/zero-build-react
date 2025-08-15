@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 export default function App() {
   // Constants
   const IDEA_ID_REGEX = /^\/zero\/idea\/([0-9a-fA-F]{24})(?:\/([^\/]+))?$/;
+  const ARTICLE_ID_REGEX = /^\/zero\/article\/([0-9a-fA-F]{24})$/;
   const POLL_INTERVAL = 3000;
   const MAX_INPUT_LENGTH = 999999; // Prácticamente infinito
   const SECTION_SLUG_MAX_LENGTH = 64;
@@ -20,18 +21,28 @@ export default function App() {
   const [ideas, setIdeas] = useState([]);
 
   // State - Routing
-  const [route, setRoute] = useState({ mode: "home", ideaId: null, section: null });
+  const [route, setRoute] = useState({ mode: "home", ideaId: null, articleId: null, section: null });
 
   const evaluateRoute = React.useCallback(() => {
-    const match = window.location.pathname.match(IDEA_ID_REGEX);
-    if (match) {
+    const ideaMatch = window.location.pathname.match(IDEA_ID_REGEX);
+    const articleMatch = window.location.pathname.match(ARTICLE_ID_REGEX);
+    
+    if (articleMatch) {
+      setRoute({ 
+        mode: "article", 
+        ideaId: null,
+        articleId: articleMatch[1],
+        section: null 
+      });
+    } else if (ideaMatch) {
       setRoute({ 
         mode: "detail", 
-        ideaId: match[1], 
-        section: match[2] ? decodeURIComponent(match[2]) : null 
+        ideaId: ideaMatch[1], 
+        articleId: null,
+        section: ideaMatch[2] ? decodeURIComponent(ideaMatch[2]) : null 
       });
     } else {
-      setRoute({ mode: "home", ideaId: null, section: null });
+      setRoute({ mode: "home", ideaId: null, articleId: null, section: null });
     }
   }, []);
 
@@ -70,6 +81,16 @@ export default function App() {
   // State - External libraries
   const [mdLib, setMdLib] = useState(null);
   const [purifyLib, setPurifyLib] = useState(null);
+  
+  // State - Article view
+  const [article, setArticle] = useState({ 
+    loading: false, 
+    title: "", 
+    content: "", 
+    status: "", 
+    model: "",
+    error: null 
+  });
 
   function slugify(str) {
     return (str || 'seccion')
@@ -150,11 +171,114 @@ export default function App() {
     }
   };
 
+  const loadArticle = async (articleId) => {
+    try {
+      setArticle(prev => ({ ...prev, loading: true, error: null }));
+      
+      // Fetch initial article data
+      const resp = await fetch(`/zero-api/article/${articleId}`);
+      const data = await resp.json();
+      
+      if (!resp.ok) {
+        throw new Error(data.error || 'Error loading article');
+      }
+      
+      setArticle({
+        loading: false,
+        title: data.title || 'Artículo',
+        content: data.content || '',
+        status: data.status || '',
+        model: data.model || '',
+        error: null
+      });
+      
+      // If article is still processing, connect to stream
+      if (data.status === 'processing') {
+        const eventSource = new EventSource(`/zero-api/article/${articleId}/stream`);
+        
+        eventSource.onmessage = (event) => {
+          try {
+            const streamData = JSON.parse(event.data);
+            
+            if (streamData.chunk) {
+              // Append new content
+              setArticle(prev => ({
+                ...prev,
+                content: prev.content + streamData.chunk
+              }));
+            }
+            
+            if (streamData.title && streamData.title !== 'Generando artículo...') {
+              setArticle(prev => ({
+                ...prev,
+                title: streamData.title
+              }));
+            }
+            
+            if (streamData.done) {
+              eventSource.close();
+              setArticle(prev => ({
+                ...prev,
+                status: streamData.status || 'completed'
+              }));
+              
+              // Extract title from content if available
+              const titleMatch = streamData.content?.match(/^#\s+(.+)$/m);
+              if (titleMatch) {
+                setArticle(prev => ({
+                  ...prev,
+                  title: titleMatch[1]
+                }));
+              }
+            }
+            
+            if (streamData.error) {
+              eventSource.close();
+              setArticle(prev => ({
+                ...prev,
+                error: streamData.error,
+                status: 'error'
+              }));
+            }
+          } catch(e) {
+            console.error('Error parsing stream data:', e);
+          }
+        };
+        
+        eventSource.onerror = (err) => {
+          console.error('EventSource error:', err);
+          eventSource.close();
+          setArticle(prev => ({
+            ...prev,
+            status: 'error',
+            error: 'Connection lost'
+          }));
+        };
+        
+        // Cleanup on unmount
+        return () => {
+          eventSource.close();
+        };
+      }
+    } catch (e) {
+      setArticle({
+        loading: false,
+        title: 'Error',
+        content: '',
+        status: 'error',
+        model: '',
+        error: String(e?.message || e)
+      });
+    }
+  };
+
   useEffect(() => {
     if (route.mode === "detail" && route.ideaId) {
       loadDetail(route.ideaId);
+    } else if (route.mode === "article" && route.articleId) {
+      loadArticle(route.articleId);
     }
-  }, [route.mode, route.ideaId]);
+  }, [route.mode, route.ideaId, route.articleId]);
 
   // Contenido actual según sección
   const currentContent = React.useMemo(() => {
@@ -535,6 +659,171 @@ export default function App() {
   }, [route.mode, route.section, route.ideaId, toc]);
 
   // Views
+  if (route.mode === "article") {
+    // Article view
+    return React.createElement(
+      "div",
+      { className: "reading-container fade-in", style: { maxWidth: '750px', margin: '40px auto' } },
+      // Header con back link
+      React.createElement(
+        "div",
+        { style: { marginBottom: '32px' } },
+        React.createElement(
+          "a",
+          { 
+            href: "/zero", 
+            className: "back-link",
+            onClick: (e) => {
+              e.preventDefault();
+              window.history.pushState(null, '', '/zero');
+              setRoute({ mode: 'home', ideaId: null, articleId: null, section: null });
+            }
+          },
+          "← Volver a Zero"
+        )
+      ),
+      
+      // Loading state
+      article.loading && React.createElement(
+        "div",
+        { className: "loading-state", style: { textAlign: 'center', padding: '60px 0' } },
+        React.createElement("p", { className: "loading-elegant" }, "Cargando artículo...")
+      ),
+      
+      // Error state
+      article.error && React.createElement(
+        "div",
+        { className: "error-elegant", style: { padding: '20px', marginTop: '20px' } },
+        article.error
+      ),
+      
+      // Article content
+      !article.loading && !article.error && React.createElement(
+        React.Fragment,
+        null,
+        // Title
+        React.createElement(
+          "h1", 
+          { 
+            className: "main-doc-title",
+            style: { 
+              fontSize: '48px',
+              fontWeight: '700',
+              lineHeight: '1.1',
+              letterSpacing: '-0.03em',
+              marginBottom: '16px',
+              background: 'linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0.85) 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
+            }
+          },
+          article.title || "Artículo"
+        ),
+        
+        // Byline
+        article.model && React.createElement(
+          "div",
+          { 
+            className: "article-byline",
+            style: {
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+              color: 'rgba(255, 255, 255, 0.5)',
+              marginBottom: '40px'
+            }
+          },
+          React.createElement(
+            "span",
+            null,
+            article.model === 'claude-opus' ? 'Por Claude Opus 4.1' : 'Por GPT-5'
+          ),
+          React.createElement("span", null, "•"),
+          React.createElement(
+            "span",
+            null,
+            new Date().toLocaleDateString('es-ES', { month: 'long', day: 'numeric', year: 'numeric' })
+          )
+        ),
+        
+        // Processing indicator
+        article.status === 'processing' && React.createElement(
+          "div",
+          { 
+            style: { 
+              padding: '12px 20px',
+              background: 'rgba(10, 132, 255, 0.1)',
+              borderRadius: '12px',
+              marginBottom: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }
+          },
+          React.createElement(
+            "div",
+            { 
+              className: "spinner-small",
+              style: {
+                width: '16px',
+                height: '16px',
+                border: '2px solid rgba(10, 132, 255, 0.3)',
+                borderTopColor: '#0a84ff',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }
+            }
+          ),
+          React.createElement("span", { style: { fontSize: '14px', color: '#0a84ff' } }, "Generando contenido...")
+        ),
+        
+        // Content
+        React.createElement(
+          "div",
+          { 
+            className: "content-section",
+            style: { 
+              fontSize: '18px',
+              lineHeight: '1.75',
+              letterSpacing: '-0.008em'
+            }
+          },
+          mdLib && purifyLib && article.content
+            ? React.createElement("div", { 
+                className: "md",
+                dangerouslySetInnerHTML: { 
+                  __html: purifyLib.sanitize(mdLib.parse(article.content))
+                } 
+              })
+            : React.createElement(
+                "div",
+                { className: "md" },
+                article.content
+                  ? React.createElement("div", {
+                      dangerouslySetInnerHTML: {
+                        __html: article.content
+                          .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
+                          .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+                          .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
+                          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                          .replace(/`([^`]+)`/g, '<code>$1</code>')
+                          .replace(/\n\n/g, '</p><p>')
+                          .replace(/^/, '<p>')
+                          .replace(/$/, '</p>')
+                      }
+                    })
+                  : React.createElement("p", { style: { opacity: 0.6 } }, 
+                      article.status === 'processing' ? "El contenido aparecerá aquí..." : "Sin contenido"
+                    )
+              )
+        )
+      )
+    );
+  }
+  
   if (route.mode === "detail") {
     
     return React.createElement(
