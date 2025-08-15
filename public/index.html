@@ -18,8 +18,8 @@
     }
     </script>
 
-    <link rel="stylesheet" href="apple-style.css">
-    <link rel="modulepreload" href="app.js" as="script" crossorigin>
+    <link rel="stylesheet" href="/zero/apple-style.css">
+    <link rel="modulepreload" href="/zero/app.js" as="script" crossorigin>
     <style>
       *, *::before, *::after { box-sizing: border-box; }
       :root {
@@ -136,7 +136,7 @@
         try {
           const React = await import('https://esm.sh/react@18.2.0');
           const { createRoot } = await import('https://esm.sh/react-dom@18.2.0/client');
-          const { default: App } = await import('./app.js');
+          const { default: App } = await import('/zero/app.js');
           createRoot(rootEl).render(React.createElement(App));
         } catch (e) {
           rootEl.innerHTML = `<div class="card"><div class="error">Error cargando UI: ${e.message}</div></div>`;
