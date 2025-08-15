@@ -2,22 +2,34 @@
 import React, { useEffect, useState } from "react";
 
 export default function App() {
-  // Entrada principal
+  // Constants
+  const IDEA_ID_REGEX = /^\/zero\/idea\/([0-9a-fA-F]{24})(?:\/([^\/]+))?$/;
+  const POLL_INTERVAL = 3000;
+  const MAX_INPUT_LENGTH = 280;
+  const SECTION_SLUG_MAX_LENGTH = 64;
+  
+  // State - Main input
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Lista de ideas recientes (desde backend)
-  const [ideas, setIdeas] = useState([]); // {id, text, status, createdAt}
+  // State - Ideas list
+  const [ideas, setIdeas] = useState([]);
 
-  // Routing mínimo: home vs detail (/zero/idea/:id) y sección opcional (/zero/idea/:id/:section)
+  // State - Routing
   const [route, setRoute] = useState({ mode: "home", ideaId: null, section: null });
 
   const evaluateRoute = () => {
-    // Soporta sección opcional como último segmento
-    const m = window.location.pathname.match(/^\/zero\/idea\/([0-9a-fA-F]{24})(?:\/([^\/]+))?$/);
-    if (m) setRoute({ mode: "detail", ideaId: m[1], section: m[2] ? decodeURIComponent(m[2]) : null });
-    else setRoute({ mode: "home", ideaId: null, section: null });
+    const match = window.location.pathname.match(IDEA_ID_REGEX);
+    if (match) {
+      setRoute({ 
+        mode: "detail", 
+        ideaId: match[1], 
+        section: match[2] ? decodeURIComponent(match[2]) : null 
+      });
+    } else {
+      setRoute({ mode: "home", ideaId: null, section: null });
+    }
   };
 
   useEffect(() => {
@@ -27,7 +39,7 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // Toggle del sidebar derecho
+  // State - UI
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
   // Keyboard shortcuts
@@ -44,15 +56,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [sidebarCollapsed]);
   
-  // Detail view state
+  // State - Detail view
   const [detail, setDetail] = useState({ loading: false, status: "", result: "" });
-  // Índice de secciones [{id, title}]
   const [toc, setToc] = useState([]);
-  // Mapa id->contenido cuando el endpoint full esté disponible
   const [sectionMap, setSectionMap] = useState({});
-  // Título principal (H1)
   const [mainTitle, setMainTitle] = useState("Idea");
-  // Markdown renderer libs
+  
+  // State - External libraries
   const [mdLib, setMdLib] = useState(null);
   const [purifyLib, setPurifyLib] = useState(null);
 
@@ -62,7 +72,7 @@ export default function App() {
       .replace(/[^a-z0-9\s-]/g, '')
       .trim()
       .replace(/\s+/g, '-')
-      .slice(0, 64);
+      .slice(0, SECTION_SLUG_MAX_LENGTH);
   }
 
   const loadDetail = async (id) => {
@@ -93,9 +103,11 @@ export default function App() {
           if (data.status === "processing") pollStatus(id);
           return;
         }
-      } catch (_) {}
+      } catch (error) {
+        // Silent fallback to simple endpoint
+      }
 
-      // Fallback al endpoint simple
+      // Fallback to simple endpoint
       const r = await fetch(`/zero-api/ideas/${id}`);
       data = await r.json();
       if (!r.ok) throw new Error(data.detail || data.error || "Error obteniendo idea");
@@ -134,9 +146,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (route.mode === "detail" && route.ideaId) loadDetail(route.ideaId);
-    // Log al backend para confirmar navegación a detalle (debug operacional)
-    try { fetch(`/zero-api/ping?event=detail_view&id=${encodeURIComponent(route.ideaId || '')}&section=${encodeURIComponent(route.section || '')}`).catch(() => {}); } catch (_) {}
+    if (route.mode === "detail" && route.ideaId) {
+      loadDetail(route.ideaId);
+    }
   }, [route.mode, route.ideaId]);
 
   // Contenido actual según sección
@@ -154,33 +166,36 @@ export default function App() {
     return "Sección no encontrada";
   }, [detail.result, route.section, sectionMap, toc]);
 
-  // Si no hay sección seleccionada pero tenemos índice, seleccionar la primera
+  // Auto-select first section if none selected
   useEffect(() => {
     if (route.mode === 'detail' && route.ideaId && !route.section && toc.length > 0) {
-      const first = toc[0];
-      window.history.replaceState(null, '', `/zero/idea/${route.ideaId}/${encodeURIComponent(first.id)}`);
-      setRoute({ mode: 'detail', ideaId: route.ideaId, section: first.id });
+      const firstSection = toc[0];
+      const newPath = `/zero/idea/${route.ideaId}/${encodeURIComponent(firstSection.id)}`;
+      window.history.replaceState(null, '', newPath);
+      setRoute({ mode: 'detail', ideaId: route.ideaId, section: firstSection.id });
     }
   }, [route.mode, route.ideaId, route.section, toc]);
 
-  // Cargar libs de Markdown en el navegador
+  // Load Markdown libraries
   useEffect(() => {
-    (async () => {
+    const loadMarkdownLibs = async () => {
       try {
-        const m = await import('https://esm.sh/marked@13');
-        const d = await import('https://esm.sh/dompurify@3');
+        const [markedModule, purifyModule] = await Promise.all([
+          import('https://esm.sh/marked@13'),
+          import('https://esm.sh/dompurify@3')
+        ]);
         
-        // Extraer marked correctamente
-        const marked = m.marked || m.default || m;
+        // Extract marked
+        const marked = markedModule.marked || markedModule.default || markedModule;
         
-        // Extraer DOMPurify y crear instancia
-        let DOMPurify = d.default || d;
+        // Extract and initialize DOMPurify
+        let DOMPurify = purifyModule.default || purifyModule;
         if (typeof DOMPurify === 'function') {
           DOMPurify = DOMPurify(window);
         }
         
-        // Configurar marked solo si es un objeto con setOptions
-        if (marked && typeof marked === 'object' && marked.setOptions) {
+        // Configure marked
+        if (marked?.setOptions) {
           marked.setOptions({ 
             breaks: true, 
             gfm: true,
@@ -189,17 +204,15 @@ export default function App() {
           });
         }
         
-        // Guardar las librerías solo si son válidas
-        if (marked) {
-          setMdLib(() => marked);
-        }
-        if (DOMPurify && typeof DOMPurify.sanitize === 'function') {
-          setPurifyLib(() => DOMPurify);
+        // Save libraries
+        if (marked) setMdLib(() => marked);
+        if (DOMPurify?.sanitize) setPurifyLib(() => DOMPurify);
         }
       } catch (err) {
-        console.error('Error loading markdown libraries:', err);
+        // Markdown libraries failed to load
       }
-    })();
+    };
+    loadMarkdownLibs();
   }, []);
 
   const htmlContent = React.useMemo(() => {
@@ -231,9 +244,10 @@ export default function App() {
       
       return html;
     } catch (err) {
-      console.error('Error rendering markdown:', err);
-      const safeContent = typeof currentContent === 'string' ? currentContent : String(currentContent || '');
-      return `<pre>${(safeContent || '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
+      // Fallback to plain text on error
+      const safeContent = String(currentContent || '');
+      const escaped = safeContent.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      return `<pre>${escaped}</pre>`;
     }
   }, [mdLib, purifyLib, currentContent]);
 
@@ -243,7 +257,9 @@ export default function App() {
       if (!r.ok) return;
       const data = await r.json();
       if (Array.isArray(data.items)) setIdeas(data.items);
-    } catch (_) {}
+    } catch (error) {
+      // Silent fail on ideas load
+    }
   };
 
   useEffect(() => { loadIdeas(); }, []);
@@ -259,17 +275,23 @@ export default function App() {
   };
 
   const pollStatus = async (id, attempts = 40) => {
+    const POLL_DELAY = 1500;
+    
     for (let i = 0; i < attempts; i++) {
-      await new Promise((res) => setTimeout(res, 1500));
+      await new Promise((resolve) => setTimeout(resolve, POLL_DELAY));
+      
       try {
-        const r = await fetch(`/zero-api/ideas/${id}`);
-        if (!r.ok) continue;
-        const data = await r.json();
+        const response = await fetch(`/zero-api/ideas/${id}`);
+        if (!response.ok) continue;
+        
+        const data = await response.json();
         if (data.status && data.status !== "processing") {
           upsertIdea({ id, status: data.status, result: data.result });
           return;
         }
-      } catch (_) {}
+      } catch (error) {
+        // Continue polling on error
+      }
     }
   };
 
