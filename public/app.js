@@ -390,16 +390,17 @@ export default function App() {
     return section ? section.title : null;
   }, [route.mode, route.section, toc]);
 
-  // Copy handler
+  // Copy handler - copiar TODO el contenido completo
   const handleCopy = React.useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(currentContent);
+      // Copiar TODO el documento, no solo la sección actual
+      await navigator.clipboard.writeText(detail.result || '');
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
     }
-  }, [currentContent]);
+  }, [detail.result]);
 
   // Share handler (Web Share API + clipboard fallback)
   const handleShare = React.useCallback(async () => {
@@ -457,19 +458,49 @@ export default function App() {
       React.createElement(
         "div",
         { className: `reading-container fade-in ${toc.length > 0 ? 'with-sidebar' : ''}` },
-      // Back link
+      // Back link y botones en header
       React.createElement(
-        "a",
-        { 
-          href: "/zero", 
-          className: "back-link",
-          onClick: (e) => {
-            e.preventDefault();
-            window.history.pushState(null, '', '/zero');
-            setRoute({ mode: 'home', ideaId: null, section: null });
-          }
-        },
-        "← Volver"
+        "div",
+        { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' } },
+        React.createElement(
+          "a",
+          { 
+            href: "/zero", 
+            className: "back-link",
+            style: { margin: 0 },
+            onClick: (e) => {
+              e.preventDefault();
+              window.history.pushState(null, '', '/zero');
+              setRoute({ mode: 'home', ideaId: null, section: null });
+            }
+          },
+          "← Volver"
+        ),
+        React.createElement(
+          "div",
+          { style: { display: 'flex', gap: '8px' } },
+          // Share button
+          React.createElement(
+            "button",
+            {
+              onClick: handleShare,
+              className: `action-button ${shareSuccess ? 'shared' : ''}`,
+              title: "Compartir enlace",
+            },
+            shareSuccess ? "✓ Listo" : "Compartir"
+          ),
+          // Copy button - copia TODO
+          React.createElement(
+            "button",
+            {
+              onClick: handleCopy,
+              className: `action-button ${copySuccess ? 'copied' : ''}`,
+              title: "Copiar TODO el contenido",
+              'aria-live': 'polite',
+            },
+            copySuccess ? "✓ Copiado" : "Copiar todo"
+          )
+        )
       ),
       // Main title - only show on first section
       isFirstSection && React.createElement("h1", { className: "main-doc-title" }, mainTitle || "Idea"),
@@ -481,32 +512,7 @@ export default function App() {
         { className: `content-section ${!isFirstSection ? 'no-main-title' : ''}`, style: { position: 'relative' } },
         detail.loading
           ? React.createElement("p", { className: "loading-elegant" }, "Cargando…")
-          : React.createElement(
-              React.Fragment,
-              null,
-              // Copy button
-              React.createElement(
-                "button",
-                {
-                  onClick: handleCopy,
-                  className: `copy-button ${copySuccess ? 'copied' : ''}`,
-                  title: "Copiar contenido",
-                  'aria-live': 'polite',
-                },
-                copySuccess ? "✓ Copiado" : "Copiar"
-              ),
-              // Share button
-              React.createElement(
-                "button",
-                {
-                  onClick: handleShare,
-                  className: `share-button ${shareSuccess ? 'shared' : ''}`,
-                  title: "Compartir enlace",
-                },
-                shareSuccess ? "✓ Listo" : "Compartir"
-              ),
-              // Content
-              htmlContent
+          : htmlContent
                 ? React.createElement("div", { className: "md", dangerouslySetInnerHTML: { __html: htmlContent } })
                 : React.createElement(
                     "pre",

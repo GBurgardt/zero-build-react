@@ -609,49 +609,35 @@ hr {
   animation: fadeInContent 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Copy button refined */
-.copy-button {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 13px;
+/* Action buttons in header */
+.action-button {
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
   font-family: var(--font-system);
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  opacity: 0.7;
-  z-index: 10;
+  white-space: nowrap;
 }
-.copy-button:hover { opacity: 1; }
-.copy-button.copied {
+.action-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+.action-button:active {
+  transform: translateY(0);
+}
+.action-button.copied {
   background: rgba(50, 215, 75, 0.15);
   border-color: rgba(50, 215, 75, 0.3);
   color: var(--accent-green);
 }
-
-/* Share button aligned with copy button */
-.share-button {
-  position: absolute;
-  top: 16px;
-  right: 102px; /* place left of copy button */
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 13px;
-  font-family: var(--font-system);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  opacity: 0.7;
-  z-index: 10;
-}
-.share-button:hover { opacity: 1; }
-.share-button.shared {
+.action-button.shared {
   background: rgba(10, 132, 255, 0.15);
   border-color: rgba(10, 132, 255, 0.3);
   color: var(--link);
