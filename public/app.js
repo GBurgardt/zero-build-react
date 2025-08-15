@@ -519,7 +519,6 @@ export default function App() {
                     { style: { whiteSpace: "pre-wrap", margin: 0 } },
                     (currentContent || "Sin contenido aún.")
                   )
-            )
       )
     ),
     // Sidebar derecho con subtítulos
