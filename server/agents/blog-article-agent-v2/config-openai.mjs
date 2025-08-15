@@ -1,10 +1,8 @@
 // server/agents/blog-article-agent-v2/config-openai.mjs
 import germanBurgartMode from "./modes/german-burgart.mjs";
-import peteKomonMode from "./modes/pete-komon.mjs";
 
 export const availableModes = {
   "german-burgart": germanBurgartMode,
-  "pete-komon": peteKomonMode,
 };
 
 const config = {

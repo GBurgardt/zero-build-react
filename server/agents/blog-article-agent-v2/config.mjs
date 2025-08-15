@@ -1,20 +1,18 @@
 // server/agents/blog-article-agent-v2/config.mjs
 import germanBurgartMode from "./modes/german-burgart.mjs";
-import peteKomonMode from "./modes/pete-komon.mjs";
 
 export const availableModes = {
   "german-burgart": germanBurgartMode,
-  "pete-komon": peteKomonMode,
 };
 
 const config = {
   model: "claude-opus-4-1-20250805",
-  defaultMode: "pete-komon",
-  getSystemPrompt: (mode = "pete-komon") => {
+  defaultMode: "german-burgart",
+  getSystemPrompt: (mode = "german-burgart") => {
     const selected = availableModes[mode];
     if (!selected) {
       console.warn(`[blog-agent] Mode "${mode}" not found, using default`);
-      return availableModes["pete-komon"].systemPrompt;
+      return availableModes["german-burgart"].systemPrompt;
     }
     return selected.systemPrompt;
   },

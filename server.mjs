@@ -521,7 +521,7 @@ async function handleGenerateArticle(req, res, ideaId) {
           ? await import('./server/agents/blog-article-agent-v2/invoker.mjs')
           : await import('./server/agents/blog-article-agent-v2/invoker-openai.mjs');
         const language = body.language === 'en' ? 'en' : 'es';
-        const mode = body.mode === 'german-burgart' ? 'german-burgart' : 'pete-komon';
+        const mode = 'german-burgart';  // Always use German Burgardt mode
         const userDirection = String(body.userDirection || '').slice(0, 4000);
         
         // Stream callback to update DB as content is generated
@@ -538,23 +538,15 @@ async function handleGenerateArticle(req, res, ideaId) {
             console.log(`[streaming] Chunk ${chunkCount}, Total chars: ${accumulatedContent.length}`);
           }
           
-          // Clean content by removing XML tags for display
-          let cleanContent = accumulatedContent;
-          // Remove internal_monologue section completely
-          cleanContent = cleanContent.replace(/<internal_monologue>[\s\S]*?<\/internal_monologue>\s*/g, '');
-          // Remove blog_article tags but keep content
-          cleanContent = cleanContent.replace(/<\/?blog_article>\s*/g, '');
-          
           // Update DB more frequently - every 5 chunks or every 500ms
           const now = Date.now();
           if (chunkCount % 5 === 0 || (now - lastUpdateTime) > 500) {
-            console.log(`[streaming] Updating DB - chunk ${chunkCount}, clean: ${cleanContent.length} chars, raw: ${accumulatedContent.length} chars`);
+            console.log(`[streaming] Updating DB - chunk ${chunkCount}, ${accumulatedContent.length} chars`);
             await blogArticles.updateOne(
               { _id: insertedId },
               { 
                 $set: { 
-                  content: cleanContent,
-                  raw: accumulatedContent,  // Store raw content separately
+                  content: accumulatedContent,  // Store raw content with tags
                   updatedAt: new Date()
                 } 
               }

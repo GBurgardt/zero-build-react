@@ -91,6 +91,7 @@ export default function App() {
     model: "",
     error: null 
   });
+  const [showMonologue, setShowMonologue] = useState(false);
 
   function slugify(str) {
     return (str || 'seccion')
@@ -204,7 +205,7 @@ export default function App() {
             
             if (streamData.chunk) {
               console.log('[Article] Appending chunk of', streamData.chunk.length, 'chars');
-              // Append new content (already cleaned by server)
+              // Append raw content with tags
               setArticle(prev => ({
                 ...prev,
                 content: prev.content + streamData.chunk
@@ -786,47 +787,122 @@ export default function App() {
           React.createElement("span", { style: { fontSize: '14px', color: '#0a84ff' } }, "Generando contenido...")
         ),
         
-        // Content
-        React.createElement(
-          "div",
-          { 
-            className: "content-section",
-            style: { 
-              fontSize: '18px',
-              lineHeight: '1.75',
-              letterSpacing: '-0.008em'
-            }
-          },
-          mdLib && purifyLib && article.content
-            ? React.createElement("div", { 
-                className: "md",
-                dangerouslySetInnerHTML: { 
-                  __html: purifyLib.sanitize(mdLib.parse(article.content))
-                } 
-              })
-            : React.createElement(
+        // Parse content to separate monologue and article
+        (() => {
+          const rawContent = article.content || '';
+          const monologueMatch = rawContent.match(/<internal_monologue>([\s\S]*?)<\/internal_monologue>/);
+          const monologue = monologueMatch ? monologueMatch[1].trim() : '';
+          const articleContent = rawContent
+            .replace(/<internal_monologue>[\s\S]*?<\/internal_monologue>\s*/g, '')
+            .replace(/<\/?blog_article>\s*/g, '')
+            .trim();
+          
+          return React.createElement(
+            React.Fragment,
+            null,
+            // Internal monologue section (if exists)
+            monologue && React.createElement(
+              "div",
+              { 
+                style: { 
+                  marginBottom: '32px',
+                  padding: '16px 20px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.06)'
+                }
+              },
+              React.createElement(
+                "button",
+                {
+                  onClick: () => setShowMonologue(!showMonologue),
+                  style: {
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255, 255, 255, 0.4)',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    padding: '0',
+                    marginBottom: showMonologue ? '16px' : '0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }
+                },
+                React.createElement(
+                  "span",
+                  { 
+                    style: { 
+                      display: 'inline-block',
+                      transform: showMonologue ? 'rotate(90deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s'
+                    }
+                  },
+                  "▶"
+                ),
+                "Monólogo interno (", 
+                monologue.split('\n').filter(l => l.trim()).length, 
+                " líneas)"
+              ),
+              showMonologue && React.createElement(
                 "div",
-                { className: "md" },
-                article.content
-                  ? React.createElement("div", {
-                      dangerouslySetInnerHTML: {
-                        __html: article.content
-                          .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
-                          .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
-                          .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
-                          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                          .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                          .replace(/`([^`]+)`/g, '<code>$1</code>')
-                          .replace(/\n\n/g, '</p><p>')
-                          .replace(/^/, '<p>')
-                          .replace(/$/, '</p>')
-                      }
-                    })
-                  : React.createElement("p", { style: { opacity: 0.6 } }, 
-                      article.status === 'processing' ? "El contenido aparecerá aquí..." : "Sin contenido"
-                    )
+                { 
+                  style: { 
+                    color: 'rgba(255, 255, 255, 0.35)',
+                    fontSize: '13px',
+                    lineHeight: '1.6',
+                    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word'
+                  }
+                },
+                monologue
               )
-        )
+            ),
+            // Article content
+            React.createElement(
+              "div",
+              { 
+                className: "content-section",
+                style: { 
+                  fontSize: '18px',
+                  lineHeight: '1.75',
+                  letterSpacing: '-0.008em'
+                }
+              },
+              mdLib && purifyLib && articleContent
+                ? React.createElement("div", { 
+                    className: "md",
+                    dangerouslySetInnerHTML: { 
+                      __html: purifyLib.sanitize(mdLib.parse(articleContent))
+                    } 
+                  })
+                : React.createElement(
+                    "div",
+                    { className: "md" },
+                    articleContent
+                      ? React.createElement("div", {
+                          dangerouslySetInnerHTML: {
+                            __html: articleContent
+                              .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
+                              .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+                              .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
+                              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                              .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                              .replace(/`([^`]+)`/g, '<code>$1</code>')
+                              .replace(/\n\n/g, '</p><p>')
+                              .replace(/^/, '<p>')
+                              .replace(/$/, '</p>')
+                          }
+                        })
+                      : React.createElement("p", { style: { opacity: 0.6 } }, 
+                          article.status === 'processing' ? "El contenido aparecerá aquí..." : "Sin contenido"
+                        )
+                  )
+            )
+          );
+        })()
       )
     );
   }
