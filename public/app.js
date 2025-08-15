@@ -19,7 +19,7 @@ export default function App() {
   // State - Routing
   const [route, setRoute] = useState({ mode: "home", ideaId: null, section: null });
 
-  const evaluateRoute = () => {
+  const evaluateRoute = React.useCallback(() => {
     const match = window.location.pathname.match(IDEA_ID_REGEX);
     if (match) {
       setRoute({ 
@@ -30,7 +30,7 @@ export default function App() {
     } else {
       setRoute({ mode: "home", ideaId: null, section: null });
     }
-  };
+  }, []);
 
   useEffect(() => {
     evaluateRoute();
@@ -294,7 +294,7 @@ export default function App() {
     }
   };
 
-  const onSubmit = async () => {
+  const onSubmit = React.useCallback(async () => {
     const text = input.trim();
     if (!text || sending) return;
     setSending(true);
@@ -316,14 +316,14 @@ export default function App() {
     } finally {
       setSending(false);
     }
-  };
+  }, [input, sending]);
 
-  const onKeyDown = (e) => {
+  const onKeyDown = React.useCallback((e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       onSubmit();
     }
-  };
+  }, [onSubmit]);
 
   // Auto-grow textarea
   useEffect(() => {
@@ -339,7 +339,7 @@ export default function App() {
   }, []);
 
   // --- Helpers de UI ---
-  const createStatBar = (label, value) => {
+  const createStatBar = React.useCallback((label, value) => {
     const maxStat = 255;
     const percentage = Math.min(100, Math.round((value / maxStat) * 100));
     return React.createElement(
@@ -360,7 +360,7 @@ export default function App() {
       ),
       React.createElement("span", null, value)
     );
-  };
+  }, []);
 
   // Calculate section info outside of conditionals (hooks must always run)
   const isFirstSection = React.useMemo(() => {
@@ -439,7 +439,7 @@ export default function App() {
         React.createElement(
           "ul",
           { className: "sidebar-items" },
-          ...toc.map((item) => (
+          toc.map((item) => (
             React.createElement(
               "li",
               { key: item.id, className: "sidebar-item" },
