@@ -526,8 +526,16 @@ async function handleGenerateArticle(req, res, ideaId) {
         
         // Stream callback to update DB as content is generated
         let accumulatedContent = '';
+        let chunkCount = 0;
         const streamCallback = async (chunk) => {
           accumulatedContent += chunk;
+          chunkCount++;
+          
+          // Log streaming progress
+          if (chunkCount % 10 === 0) {
+            console.log(`[streaming] Chunk ${chunkCount}, Total chars: ${accumulatedContent.length}`);
+          }
+          
           // Update article in DB with partial content
           await blogArticles.updateOne(
             { _id: insertedId },
@@ -679,18 +687,29 @@ async function handleArticleStream(req, res, articleId) {
     // If article is processing, poll for updates
     if (article.status === 'processing') {
       let lastContent = article.content || '';
+      let pollCount = 0;
+      console.log(`[article-stream] Starting polling for article ${articleId}`);
+      
       const pollInterval = setInterval(async () => {
         try {
+          pollCount++;
           const updated = await blogArticles.findOne({ _id });
           if (!updated) {
+            console.log(`[article-stream] Article not found, stopping poll`);
             clearInterval(pollInterval);
             res.end();
             return;
           }
           
+          // Log polling status every 10 polls
+          if (pollCount % 10 === 0) {
+            console.log(`[article-stream] Poll ${pollCount}, content length: ${updated.content?.length || 0}`);
+          }
+          
           // Send only new content
           if (updated.content !== lastContent) {
             const newContent = updated.content.substring(lastContent.length);
+            console.log(`[article-stream] Sending chunk of ${newContent.length} chars`);
             res.write(`data: ${JSON.stringify({ 
               chunk: newContent,
               status: updated.status 
