@@ -1007,6 +1007,9 @@ hr {
   color: var(--text-tertiary);
   opacity: 0.7;
   letter-spacing: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .idea-meta::before {
@@ -1019,6 +1022,26 @@ hr {
   margin-right: 8px;
   vertical-align: middle;
   opacity: 0.8;
+}
+
+/* Model tag in idea list - subtle and elegant */
+.idea-model-tag {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.35);
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  white-space: nowrap;
+  margin-right: 2px;
+}
+
+.idea-card:hover .idea-model-tag {
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 /* Error message styling */

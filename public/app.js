@@ -694,6 +694,12 @@ export default function App() {
           React.createElement(
             "div",
             { className: "idea-meta" },
+            React.createElement(
+              "span",
+              { className: "idea-model-tag" },
+              item.model === 'claude-opus' ? 'Claude' : item.model === 'gpt-5' ? 'GPT-5' : ''
+            ),
+            item.model && " • ",
             item.status === 'processing' ? 'Procesando…' : item.status === 'done' ? 'Completado' : (item.status || ''),
             " • ",
             new Date(item.createdAt).toLocaleDateString()

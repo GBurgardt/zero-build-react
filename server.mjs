@@ -431,8 +431,8 @@ async function handleIdeaStatus(req, res, id) {
 async function handleListIdeas(req, res) {
   try {
     const { ideas } = await getDb();
-    const list = await ideas.find({}, { projection: { text: 1, status: 1, createdAt: 1 } }).sort({ createdAt: -1 }).limit(50).toArray();
-    return json(res, 200, { items: list.map(i => ({ id: String(i._id), text: i.text, status: i.status, createdAt: i.createdAt })) });
+    const list = await ideas.find({}, { projection: { text: 1, status: 1, model: 1, createdAt: 1 } }).sort({ createdAt: -1 }).limit(50).toArray();
+    return json(res, 200, { items: list.map(i => ({ id: String(i._id), text: i.text, status: i.status, model: i.model, createdAt: i.createdAt })) });
   } catch (e) {
     return json(res, 500, { error: 'server_error', detail: String(e?.message || e) });
   }
