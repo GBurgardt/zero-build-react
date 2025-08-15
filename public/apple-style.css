@@ -1257,9 +1257,36 @@ hr {
   animation: metaFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
 }
 
+/* Article byline - positioned after title */
+.article-byline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 8px;
+  margin-bottom: 20px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
 .article-model-badge {
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.45);
   transition: color 0.3s ease;
+}
+
+.byline-separator {
+  color: rgba(255, 255, 255, 0.25);
+  margin: 0 2px;
+}
+
+.article-date {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.article-byline:hover .article-model-badge,
+.article-byline:hover .article-date {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .article-meta:hover .article-model-badge {

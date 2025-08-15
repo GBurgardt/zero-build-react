@@ -571,22 +571,27 @@ export default function App() {
       isFirstSection && React.createElement(
         "div",
         { className: "title-section" },
-        // Elegant byline positioning - model info as subtle context
+        React.createElement("h1", { className: "main-doc-title" }, mainTitle || "Idea"),
+        // Elegant byline positioning - model info as subtle context AFTER title
         detail.model && React.createElement(
           "div",
           { className: "article-byline" },
           React.createElement(
             "span",
             { className: "article-model-badge" },
-            detail.model === 'claude-opus' ? '🤖 Claude Opus 4.1' : '🤖 GPT-5'
+            detail.model === 'claude-opus' ? 'Por Claude Opus 4.1' : 'Por GPT-5'
+          ),
+          React.createElement(
+            "span",
+            { className: "byline-separator" },
+            " • "
           ),
           React.createElement(
             "span",
             { className: "article-date" },
-            new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+            new Date().toLocaleDateString('es-ES', { month: 'long', day: 'numeric', year: 'numeric' })
           )
-        ),
-        React.createElement("h1", { className: "main-doc-title" }, mainTitle || "Idea")
+        )
       ),
       // Inline controls to generate Article/Pragmatic from THIS idea
       React.createElement(
@@ -773,49 +778,6 @@ export default function App() {
           sending 
             ? React.createElement("span", { className: "spinner", "aria-hidden": true }) 
             : React.createElement("span", null, "Process Idea →")
-        )
-      )
-    ),
-    // Direction input and create buttons - matching the refined style
-    React.createElement(
-      "div",
-      { className: "composer", style: { marginTop: -32 } },
-      React.createElement(
-        "div",
-        { className: "composer-main" },
-        React.createElement("textarea", {
-          value: userDirection,
-          onChange: (e) => setUserDirection(e.target.value),
-          rows: 3,
-          placeholder: "Optional: Add specific directions or angle for the document",
-          className: "input-field",
-          style: { minHeight: '80px' },
-          "aria-label": "Document direction"
-        }),
-        React.createElement(
-          "button",
-          {
-            onClick: async () => {
-              try {
-                // Take the first ready idea or create a new one if none
-                const first = ideas[0];
-                if (!first) {
-                  alert('Please create an idea first.');
-                  return;
-                }
-                await generateFromIdea(first.id);
-              } catch (e) {
-                alert(String(e?.message || e));
-              }
-            },
-            className: "submit-button",
-            style: { height: '44px' },
-            title: "Generate Document",
-            "aria-label": "Generate Document"
-          },
-          React.createElement("span", null, 
-            docType === 'article' ? 'Generate Article →' : 'Generate Pragmatic →'
-          )
         )
       )
     ),
