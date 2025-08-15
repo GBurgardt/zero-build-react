@@ -509,7 +509,7 @@ async function handleGenerateArticle(req, res, ideaId) {
     json(res, 200, { 
       success: true, 
       articleId: String(insertedId), 
-      redirectUrl: `/article/${String(insertedId)}` 
+      redirectUrl: `/zero/article/${String(insertedId)}` 
     });
     
     // Start generation in background
