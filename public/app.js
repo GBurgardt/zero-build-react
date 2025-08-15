@@ -12,6 +12,7 @@ export default function App() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [selectedModel, setSelectedModel] = useState("gpt-5");
 
   // State - Ideas list
   const [ideas, setIdeas] = useState([]);
@@ -41,6 +42,7 @@ export default function App() {
 
   // State - UI
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -303,7 +305,7 @@ export default function App() {
       const r = await fetch("/zero-api/ideas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text, model: selectedModel })
       });
       const data = await r.json();
       if (!r.ok || data.error) throw new Error(data.detail || data.error || "Error creando idea");
@@ -316,7 +318,7 @@ export default function App() {
     } finally {
       setSending(false);
     }
-  }, [input, sending]);
+  }, [input, sending, selectedModel]);
 
   const onKeyDown = React.useCallback((e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -376,6 +378,17 @@ export default function App() {
     return section ? section.title : null;
   }, [route.mode, route.section, toc]);
 
+  // Copy handler
+  const handleCopy = React.useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(currentContent);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  }, [currentContent]);
+
   // Views
   if (route.mode === "detail") {
     
@@ -401,22 +414,54 @@ export default function App() {
       ),
       // Main title - only show on first section
       isFirstSection && React.createElement("h1", { className: "main-doc-title" }, mainTitle || "Idea"),
-      isFirstSection && React.createElement("p", { className: "meta" }, `ID: ${route.ideaId}`),
       // Section title as primary header when not on first section
       !isFirstSection && currentSectionTitle && React.createElement("h1", { className: "section-as-title" }, currentSectionTitle),
       // Main content
       React.createElement(
         "div",
-        { className: `content-section ${!isFirstSection ? 'no-main-title' : ''}` },
+        { className: `content-section ${!isFirstSection ? 'no-main-title' : ''}`, style: { position: 'relative' } },
         detail.loading
           ? React.createElement("p", { className: "loading-elegant" }, "Cargando…")
-          : htmlContent
-            ? React.createElement("div", { className: "md", dangerouslySetInnerHTML: { __html: htmlContent } })
-            : React.createElement(
-                "pre",
-                { style: { whiteSpace: "pre-wrap", margin: 0 } },
-                (currentContent || "Sin contenido aún.")
-              )
+          : React.createElement(
+              React.Fragment,
+              null,
+              // Copy button
+              React.createElement(
+                "button",
+                {
+                  onClick: handleCopy,
+                  className: "copy-button",
+                  title: "Copiar contenido",
+                  style: {
+                    position: 'absolute',
+                    top: '16px',
+                    right: '16px',
+                    padding: '8px 12px',
+                    background: copySuccess ? 'rgba(50, 215, 75, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                    border: `1px solid ${copySuccess ? 'rgba(50, 215, 75, 0.3)' : 'rgba(255, 255, 255, 0.08)'}`,
+                    borderRadius: '8px',
+                    color: copySuccess ? '#32d74b' : 'rgba(255, 255, 255, 0.5)',
+                    fontSize: '13px',
+                    fontFamily: 'var(--font-system)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    opacity: 0.6,
+                    zIndex: 10
+                  },
+                  onMouseEnter: (e) => { e.target.style.opacity = '1'; },
+                  onMouseLeave: (e) => { if (!copySuccess) e.target.style.opacity = '0.6'; }
+                },
+                copySuccess ? "✓ Copiado" : "Copiar"
+              ),
+              // Content
+              htmlContent
+                ? React.createElement("div", { className: "md", dangerouslySetInnerHTML: { __html: htmlContent } })
+                : React.createElement(
+                    "pre",
+                    { style: { whiteSpace: "pre-wrap", margin: 0 } },
+                    (currentContent || "Sin contenido aún.")
+                  )
+            )
       )
     ),
     // Sidebar derecho con subtítulos
@@ -474,6 +519,22 @@ export default function App() {
       { className: "home-hero" },
       React.createElement("h1", { className: "home-title" }, "Research Lab"),
       React.createElement("p", { className: "home-subtitle" }, "Procesá y analizá ideas para convertirlas en conocimiento")
+    ),
+
+    // Model selector
+    React.createElement(
+      "div",
+      { className: "model-selector" },
+      React.createElement(
+        "select",
+        {
+          value: selectedModel,
+          onChange: (e) => setSelectedModel(e.target.value),
+          className: "model-dropdown"
+        },
+        React.createElement("option", { value: "gpt-5" }, "GPT-5"),
+        React.createElement("option", { value: "claude-opus" }, "Claude Opus 4.1")
+      )
     ),
 
     // Input section

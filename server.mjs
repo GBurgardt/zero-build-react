@@ -7,6 +7,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { URL } from 'node:url';
 import { MongoClient, ObjectId } from 'mongodb';
 import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import { systemPrompt as superInfoSystem, userPrompt as superInfoUser } from './server/prompts/superinformation.prompt.mjs';
 import { systemPrompt as bukSystem, userPrompt as bukUser } from './server/prompts/bukowsky.prompt.mjs';
 
@@ -35,10 +36,12 @@ loadDotEnvIfPresent('.env');
 
 const PORT = Number(process.env.PORT || 3004);
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'; // Set OPENAI_MODEL=gpt-5 if available
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/zerodb';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5';
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+const anthropic = ANTHROPIC_API_KEY ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
 
 let mongoClient;
 let ideasCollection;
@@ -184,10 +187,72 @@ async function handleCreateIdea(req, res) {
       updatedAt: new Date(),
     };
     const { insertedId } = await ideas.insertOne(idea);
-    processIdea(insertedId).catch(err => console.error('processIdea error', err));
+    
+    // Elegir procesador según modelo
+    const model = body.model || 'gpt-5';
+    if (model === 'claude-opus') {
+      processWithClaude(insertedId).catch(err => console.error('processWithClaude error', err));
+    } else {
+      processIdea(insertedId).catch(err => console.error('processIdea error', err));
+    }
+    
     return json(res, 200, { id: String(insertedId), status: 'processing' });
   } catch (err) {
     return json(res, 500, { error: 'server_error', detail: String(err?.message || err) });
+  }
+}
+
+async function processWithClaude(id) {
+  const { ideas } = await getDb();
+  const _id = new ObjectId(id);
+  const doc = await ideas.findOne({ _id });
+  if (!doc || !anthropic) return;
+  
+  try {
+    console.log('[claude] Processing with Claude Opus 4.1...');
+    
+    // Paso 1: Super Information con Claude
+    const superInfoMessages = [{
+      role: 'user',
+      content: superInfoUser.replace('{input}', doc.text)
+    }];
+    
+    const superInfoResponse = await anthropic.messages.create({
+      model: 'claude-3-opus-20240229', // Claude Opus 4.1
+      max_tokens: 8000,
+      temperature: 0.7,
+      system: superInfoSystem,
+      messages: superInfoMessages
+    });
+    
+    const superText = superInfoResponse.content[0]?.text || '';
+    const superinfo = (superText.match(/<superinfo>([\s\S]*?)<\/superinfo>/i)?.[1] || superText).trim();
+    await ideas.updateOne({ _id }, { $set: { superinfo_raw: superinfo, updatedAt: new Date() } });
+    
+    // Paso 2: Bukowsky con Claude
+    const bukMessages = [{
+      role: 'user',
+      content: `${bukUser}\nInput: ${superinfo}`
+    }];
+    
+    const bukResponse = await anthropic.messages.create({
+      model: 'claude-3-opus-20240229', // Claude Opus 4.1
+      max_tokens: 8000,
+      temperature: 0.7,
+      system: bukSystem,
+      messages: bukMessages
+    });
+    
+    const bukText = bukResponse.content[0]?.text || '';
+    const resume = (bukText.match(/<resume>([\s\S]*?)<\/resume>/i)?.[1] || bukText).trim();
+    
+    const { toc, sections } = deriveSectionsFromResume(resume);
+    await ideas.updateOne({ _id }, { $set: { status: 'done', result: resume, toc, sections, updatedAt: new Date() } });
+    
+    console.log('[claude] Processing completed successfully');
+  } catch (e) {
+    console.error('[claude] Error:', e);
+    await ideas.updateOne({ _id }, { $set: { status: 'error', error: String(e?.message || e), updatedAt: new Date() } });
   }
 }
 
