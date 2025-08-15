@@ -341,11 +341,11 @@ export default function App() {
 
   // Auto-grow textarea
   useEffect(() => {
-    const el = document.querySelector('textarea.input');
+    const el = document.querySelector('textarea.input-field');
     if (!el) return;
     const handler = () => {
       el.style.height = 'auto';
-      el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+      el.style.height = Math.min(el.scrollHeight, 200) + 'px';
     };
     handler();
     el.addEventListener('input', handler);
@@ -608,20 +608,20 @@ export default function App() {
       "div",
       { className: "home-hero" },
       React.createElement("h1", { className: "home-title" }, "Research Lab"),
-      React.createElement("p", { className: "home-subtitle" }, "Procesá y analizá ideas para convertirlas en conocimiento")
+      React.createElement("p", { className: "home-subtitle" }, "Process and analyze ideas to turn them into knowledge")
     ),
 
-    // Model selector
+    // Composer (model + textarea + send)
     React.createElement(
       "div",
-      { className: "model-selector" },
+      { className: "composer" },
       React.createElement(
         React.Fragment,
         null,
         React.createElement(
           "label",
           { htmlFor: "model-select", className: "visually-hidden" },
-          "Modelo"
+          "Model"
         ),
         React.createElement(
           "select",
@@ -630,27 +630,17 @@ export default function App() {
             value: selectedModel,
             onChange: (e) => setSelectedModel(e.target.value),
             className: "model-dropdown",
-            "aria-label": "Seleccionar modelo"
+            "aria-label": "Select model"
           },
           React.createElement("option", { value: "gpt-5" }, "GPT-5"),
           React.createElement("option", { value: "claude-opus" }, "Claude Opus 4.1")
-        )
-      )
-    ),
-
-    // Input section
-    React.createElement(
-      "div",
-      { className: "input-section" },
-      React.createElement(
-        "div",
-        { className: "input-container" },
+        ),
         React.createElement("textarea", {
           value: input,
           onChange: (e) => setInput(e.target.value),
           onKeyDown,
-          rows: 4,
-          placeholder: "Pegá un texto o escribí tu idea aquí...",
+          rows: 5,
+          placeholder: "Paste text or type your idea here...",
           className: "input-field"
         }),
         React.createElement(
@@ -659,15 +649,15 @@ export default function App() {
             onClick: onSubmit, 
             disabled: sending || !input.trim(), 
             className: "submit-button", 
-            title: "Enviar (Enter)" 
+            title: "Send (Enter)" 
           },
           sending 
             ? React.createElement("span", { className: "spinner", "aria-hidden": true }) 
             : "→"
         )
-      ),
-      errorMsg && React.createElement("div", { className: "error-elegant", style: { marginTop: '8px' } }, errorMsg)
+      )
     ),
+    errorMsg && React.createElement("div", { className: "error-elegant", style: { marginTop: '8px' } }, errorMsg),
 
     // Ideas list
     ideas.length > 0 && React.createElement(
@@ -693,14 +683,14 @@ export default function App() {
           ),
           React.createElement(
             "div",
-            { className: "idea-meta" },
+            { className: "idea-meta", 'data-status': item.status || '' },
             React.createElement(
               "span",
               { className: "idea-model-tag" },
               item.model === 'claude-opus' ? 'Claude' : item.model === 'gpt-5' ? 'GPT-5' : ''
             ),
             item.model && " • ",
-            item.status === 'processing' ? 'Procesando…' : item.status === 'done' ? 'Completado' : (item.status || ''),
+            item.status === 'processing' ? 'Processing…' : item.status === 'done' ? 'Completed' : (item.status || ''),
             " • ",
             new Date(item.createdAt).toLocaleDateString()
           )

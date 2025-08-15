@@ -711,10 +711,24 @@ hr {
 }
 
 /* Model selector */
-.model-selector {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 24px;
+/* Composer row (model + textarea + send) */
+.composer {
+  display: grid;
+  grid-template-columns: 220px 1fr 48px;
+  gap: 12px;
+  align-items: start;
+  max-width: 720px;
+  margin: 0 auto 24px;
+}
+
+@media (max-width: 640px) {
+  .composer {
+    grid-template-columns: 1fr;
+  }
+  .submit-button {
+    width: 100%;
+    height: 44px;
+  }
 }
 
 .model-dropdown {
@@ -791,33 +805,24 @@ hr {
   letter-spacing: 0.005em;
 }
 
-.input-section {
-  max-width: 520px;
-  margin: 0 auto var(--spacing-xl);
-}
-
-.input-container {
-  position: relative;
-}
+/* deprecated old layout (.model-selector + .input-section) now unused */
 
 .input-field {
   width: 100%;
-  padding: 14px 54px 14px 22px;
+  padding: 12px 14px;
   font-size: 16px;
-  line-height: 1.4;
+  line-height: 1.5;
   font-family: var(--font-system);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 24px;
+  border-radius: 14px;
   background: var(--surface-elevated);
   color: var(--text-primary);
-  box-shadow: 
-    inset 0 1px 0 rgba(255, 255, 255, 0.02),
-    0 2px 8px rgba(0, 0, 0, 0.2);
-  resize: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  resize: vertical;
+  min-height: 110px; /* ~5 lines */
+  max-height: 260px;
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  min-height: 44px;
-  max-height: 44px;
   letter-spacing: -0.01em;
 }
 
@@ -837,12 +842,8 @@ hr {
 }
 
 .submit-button {
-  position: absolute;
-  top: 50%;
-  right: 5px;
-  transform: translateY(-50%);
-  width: 38px;
-  height: 38px;
+  width: 48px;
+  height: 48px;
   padding: 0;
   background: var(--link);
   box-shadow: 
@@ -852,7 +853,7 @@ hr {
   overflow: hidden;
   color: white;
   border: none;
-  border-radius: 50%;
+  border-radius: 12px;
   font-size: 16px;
   font-weight: 400;
   cursor: pointer;
@@ -1023,6 +1024,14 @@ hr {
   vertical-align: middle;
   opacity: 0.8;
 }
+
+/* Status colors: orange while processing, green when done, red on error */
+.idea-meta[data-status="processing"]::before { background: var(--accent-yellow); }
+.idea-meta[data-status="done"]::before { background: var(--accent-green); }
+.idea-meta[data-status="error"]::before { background: var(--danger); }
+
+/* Tone down meta text */
+.idea-meta { opacity: 0.6; }
 
 /* Model tag in idea list - subtle and elegant */
 .idea-model-tag {
