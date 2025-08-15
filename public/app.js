@@ -544,15 +544,6 @@ export default function App() {
         React.createElement(
           "div",
           { style: { display: 'flex', gap: '8px' } },
-          // Model badge - indicador del modelo usado
-          detail.model && React.createElement(
-            "span",
-            {
-              className: "model-badge",
-              title: `Generado con ${detail.model === 'claude-opus' ? 'Claude Opus 4.1' : 'GPT-5'}`,
-            },
-            detail.model === 'claude-opus' ? '🎭 Claude Opus 4.1' : '🤖 GPT-5'
-          ),
           // Share button
           React.createElement(
             "button",
@@ -576,8 +567,27 @@ export default function App() {
           )
         )
       ),
-      // Main title - only show on first section
-      isFirstSection && React.createElement("h1", { className: "main-doc-title" }, mainTitle || "Idea"),
+      // Main title and metadata - only show on first section
+      isFirstSection && React.createElement(
+        "div",
+        { className: "title-section" },
+        // Elegant byline positioning - model info as subtle context
+        detail.model && React.createElement(
+          "div",
+          { className: "article-byline" },
+          React.createElement(
+            "span",
+            { className: "article-model-badge" },
+            detail.model === 'claude-opus' ? '🤖 Claude Opus 4.1' : '🤖 GPT-5'
+          ),
+          React.createElement(
+            "span",
+            { className: "article-date" },
+            new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+          )
+        ),
+        React.createElement("h1", { className: "main-doc-title" }, mainTitle || "Idea")
+      ),
       // Inline controls to generate Article/Pragmatic from THIS idea
       React.createElement(
         "div",
@@ -847,14 +857,10 @@ export default function App() {
           React.createElement(
             "div",
             { className: "idea-meta", 'data-status': item.status || '' },
-            React.createElement(
-              "span",
-              { className: "idea-model-tag" },
-              item.model === 'claude-opus' ? 'Claude' : item.model === 'gpt-5' ? 'GPT-5' : ''
-            ),
-            item.model && " • ",
+            // Clean metadata - no model display, just status and date
+            // Model info intentionally excluded for cleaner home page
             item.status === 'processing' ? 'Processing…' : item.status === 'done' ? 'Completed' : (item.status || ''),
-            " • ",
+            item.status ? " • " : "",
             new Date(item.createdAt).toLocaleDateString()
           )
         )

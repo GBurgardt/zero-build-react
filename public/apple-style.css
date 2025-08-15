@@ -1237,3 +1237,99 @@ hr {
 .chevron {
   display: none !important;
 }
+
+/* Title Section - Steve Jobs inspired hierarchy */
+.title-section {
+  margin-bottom: 48px;
+  animation: titleReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.title-section .main-doc-title {
+  margin-bottom: 12px;
+}
+
+/* Article metadata - subtle and elegant */
+.article-meta {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  animation: metaFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
+
+.article-model-badge {
+  color: rgba(255, 255, 255, 0.35);
+  transition: color 0.3s ease;
+}
+
+.article-meta:hover .article-model-badge {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+@keyframes titleReveal {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes metaFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced home title */
+.home-title {
+  font-size: 64px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #a0a0a0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: titlePulse 3s ease-in-out infinite alternate;
+}
+
+@keyframes titlePulse {
+  from {
+    filter: brightness(1);
+  }
+  to {
+    filter: brightness(1.1);
+  }
+}
+
+.home-subtitle {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
+  margin-bottom: 64px;
+  letter-spacing: 0.002em;
+  line-height: 1.5;
+}
+
+/* Refined idea cards without model clutter */
+.idea-meta {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+  transition: color 0.3s ease;
+}
+
+.idea-card:hover .idea-meta {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Remove model tag completely from home view */
+.idea-model-tag {
+  display: none !important;
+}
