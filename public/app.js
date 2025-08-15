@@ -194,13 +194,16 @@ export default function App() {
       
       // If article is still processing, connect to stream
       if (data.status === 'processing') {
+        console.log('[Article] Connecting to stream for article:', articleId);
         const eventSource = new EventSource(`/zero-api/article/${articleId}/stream`);
         
         eventSource.onmessage = (event) => {
           try {
             const streamData = JSON.parse(event.data);
+            console.log('[Article] Stream data received:', streamData);
             
             if (streamData.chunk) {
+              console.log('[Article] Appending chunk of', streamData.chunk.length, 'chars');
               // Append new content
               setArticle(prev => ({
                 ...prev,
@@ -245,8 +248,12 @@ export default function App() {
           }
         };
         
+        eventSource.onopen = () => {
+          console.log('[Article] EventSource connection opened');
+        };
+        
         eventSource.onerror = (err) => {
-          console.error('EventSource error:', err);
+          console.error('[Article] EventSource error:', err);
           eventSource.close();
           setArticle(prev => ({
             ...prev,
