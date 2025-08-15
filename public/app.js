@@ -348,10 +348,11 @@ export default function App() {
     
     // Get current section title for non-first sections
     const currentSectionTitle = React.useMemo(() => {
-      if (isFirstSection || !route.section) return null;
+      const firstCheck = !route.section || (toc.length > 0 && toc[0].id === route.section);
+      if (firstCheck || !route.section) return null;
       const section = toc.find(t => t.id === route.section);
       return section ? section.title : null;
-    }, [route.section, toc, isFirstSection]);
+    }, [route.section, toc]);
     
     return React.createElement(
       React.Fragment,
