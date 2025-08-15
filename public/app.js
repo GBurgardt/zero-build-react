@@ -341,18 +341,22 @@ export default function App() {
     );
   };
 
+  // Calculate section info outside of conditionals (hooks must always run)
+  const isFirstSection = React.useMemo(() => {
+    if (route.mode !== "detail") return false;
+    return !route.section || (toc.length > 0 && toc[0].id === route.section);
+  }, [route.mode, route.section, toc]);
+  
+  const currentSectionTitle = React.useMemo(() => {
+    if (route.mode !== "detail") return null;
+    const firstCheck = !route.section || (toc.length > 0 && toc[0].id === route.section);
+    if (firstCheck || !route.section) return null;
+    const section = toc.find(t => t.id === route.section);
+    return section ? section.title : null;
+  }, [route.mode, route.section, toc]);
+
   // Views
   if (route.mode === "detail") {
-    // Check if we're on the first section
-    const isFirstSection = !route.section || (toc.length > 0 && toc[0].id === route.section);
-    
-    // Get current section title for non-first sections
-    const currentSectionTitle = React.useMemo(() => {
-      const firstCheck = !route.section || (toc.length > 0 && toc[0].id === route.section);
-      if (firstCheck || !route.section) return null;
-      const section = toc.find(t => t.id === route.section);
-      return section ? section.title : null;
-    }, [route.section, toc]);
     
     return React.createElement(
       React.Fragment,
