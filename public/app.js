@@ -60,7 +60,7 @@ export default function App() {
   }, [sidebarCollapsed]);
   
   // State - Detail view
-  const [detail, setDetail] = useState({ loading: false, status: "", result: "" });
+  const [detail, setDetail] = useState({ loading: false, status: "", result: "", model: "" });
   const [toc, setToc] = useState([]);
   const [sectionMap, setSectionMap] = useState({});
   const [mainTitle, setMainTitle] = useState("Idea");
@@ -89,7 +89,7 @@ export default function App() {
         data = await rFull.json();
         ok = rFull.ok;
         if (ok) {
-          setDetail({ loading: false, status: data.status || "", result: data.resume_raw || data.result || "" });
+          setDetail({ loading: false, status: data.status || "", result: data.resume_raw || data.result || "", model: data.model || "" });
           const nextToc = Array.isArray(data.toc) ? data.toc : [];
           setToc(nextToc);
           const nextMap = {};
@@ -114,7 +114,7 @@ export default function App() {
       const r = await fetch(`/zero-api/ideas/${id}`);
       data = await r.json();
       if (!r.ok) throw new Error(data.detail || data.error || "Error obteniendo idea");
-      setDetail({ loading: false, status: data.status || "", result: data.result || "" });
+      setDetail({ loading: false, status: data.status || "", result: data.result || "", model: data.model || "" });
       if (data.result) {
         const titles = [...data.result.matchAll(/^## (.+)$/gm)].map(m => m[1]);
         const nextToc = titles.map(t => ({ id: slugify(t), title: t }));
@@ -141,7 +141,7 @@ export default function App() {
       }
       if (data.status === "processing") pollStatus(id);
     } catch (e) {
-      setDetail({ loading: false, status: "error", result: String(e?.message || e) });
+      setDetail({ loading: false, status: "error", result: String(e?.message || e), model: "" });
       setToc([]);
       setSectionMap({});
       setMainTitle('Idea');
@@ -449,6 +449,30 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [route.mode, handleCopy, handleShare]);
 
+  // Navegación con flechas entre títulos del contenido
+  useEffect(() => {
+    if (route.mode !== 'detail' || toc.length === 0) return;
+    const handler = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target;
+      const tag = (target?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const currentIndex = toc.findIndex(t => t.id === route.section);
+      let nextIndex = currentIndex;
+      if (e.key === 'ArrowRight') nextIndex = Math.min(toc.length - 1, (currentIndex < 0 ? 0 : currentIndex + 1));
+      else nextIndex = Math.max(0, (currentIndex < 0 ? 0 : currentIndex - 1));
+      if (nextIndex >= 0 && nextIndex < toc.length && nextIndex !== currentIndex) {
+        const next = toc[nextIndex];
+        window.history.pushState(null, '', `/zero/idea/${route.ideaId}/${encodeURIComponent(next.id)}`);
+        setRoute({ mode: 'detail', ideaId: route.ideaId, section: next.id });
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [route.mode, route.section, route.ideaId, toc]);
+
   // Views
   if (route.mode === "detail") {
     
@@ -479,6 +503,15 @@ export default function App() {
         React.createElement(
           "div",
           { style: { display: 'flex', gap: '8px' } },
+          // Model badge - indicador del modelo usado
+          detail.model && React.createElement(
+            "span",
+            {
+              className: "model-badge",
+              title: `Generado con ${detail.model === 'claude-opus' ? 'Claude Opus 4.1' : 'GPT-5'}`,
+            },
+            detail.model === 'claude-opus' ? '🎭 Claude Opus 4.1' : '🤖 GPT-5'
+          ),
           // Share button
           React.createElement(
             "button",

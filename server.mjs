@@ -263,7 +263,7 @@ async function processWithClaude(id) {
     
     const superInfoResponse = await anthropic.messages.create({
       model: 'claude-opus-4-1-20250805', // Claude Opus 4.1
-      max_tokens: 8000,
+      max_tokens: 32000, // Máximo soportado por Claude Opus 4.1
       temperature: 0.7,
       system: superInfoSystem,
       messages: superInfoMessages
@@ -289,7 +289,7 @@ async function processWithClaude(id) {
     
     const bukResponse = await anthropic.messages.create({
       model: 'claude-opus-4-1-20250805', // Claude Opus 4.1
-      max_tokens: 8000,
+      max_tokens: 32000, // Máximo soportado por Claude Opus 4.1
       temperature: 0.7,
       system: bukSystem,
       messages: bukMessages
@@ -346,7 +346,7 @@ async function processIdea(id) {
       reasoning: { effort: 'high', summary: 'auto' },
       tools: [],
       store: true,
-      max_output_tokens: 16384,
+      max_output_tokens: 128000, // Máximo soportado por GPT-5
     });
     const superText = superResp.output_text || (superResp.output?.[0]?.content?.[0]?.text) || '';
     const superinfo = (superText.match(/<superinfo>([\s\S]*?)<\/superinfo>/i)?.[1] || superText).trim();
@@ -365,7 +365,7 @@ async function processIdea(id) {
       reasoning: { effort: 'high', summary: 'auto' },
       tools: [],
       store: true,
-      max_output_tokens: 16384,
+      max_output_tokens: 128000, // Máximo soportado por GPT-5
     });
     const bukText = bukResp.output_text || (bukResp.output?.[0]?.content?.[0]?.text) || '';
     const resume = (bukText.match(/<resume>([\s\S]*?)<\/resume>/i)?.[1] || bukText).trim();
@@ -422,7 +422,7 @@ async function handleIdeaStatus(req, res, id) {
     const { ideas } = await getDb();
     const doc = await ideas.findOne({ _id: new ObjectId(id) });
     if (!doc) return json(res, 404, { error: 'not_found' });
-    return json(res, 200, { id, status: doc.status, result: doc.result, updatedAt: doc.updatedAt });
+    return json(res, 200, { id, status: doc.status, result: doc.result, model: doc.model, updatedAt: doc.updatedAt });
   } catch (e) {
     return json(res, 500, { error: 'server_error', detail: String(e?.message || e) });
   }
@@ -499,6 +499,7 @@ const server = http.createServer(async (req, res) => {
         id: String(doc._id),
         status: doc.status,
         text: doc.text,
+        model: doc.model, // Incluir el modelo usado
         superinfo_raw: doc.superinfo_raw,
         resume_raw: doc.result,
         toc: doc.toc || [],
