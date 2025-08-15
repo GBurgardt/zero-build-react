@@ -527,6 +527,8 @@ async function handleGenerateArticle(req, res, ideaId) {
         // Stream callback to update DB as content is generated
         let accumulatedContent = '';
         let chunkCount = 0;
+        let lastUpdateTime = Date.now();
+        
         const streamCallback = async (chunk) => {
           accumulatedContent += chunk;
           chunkCount++;
@@ -536,16 +538,21 @@ async function handleGenerateArticle(req, res, ideaId) {
             console.log(`[streaming] Chunk ${chunkCount}, Total chars: ${accumulatedContent.length}`);
           }
           
-          // Update article in DB with partial content
-          await blogArticles.updateOne(
-            { _id: insertedId },
-            { 
-              $set: { 
-                content: accumulatedContent,
-                updatedAt: new Date()
-              } 
-            }
-          );
+          // Update DB more frequently - every 5 chunks or every 500ms
+          const now = Date.now();
+          if (chunkCount % 5 === 0 || (now - lastUpdateTime) > 500) {
+            console.log(`[streaming] Updating DB - chunk ${chunkCount}, ${accumulatedContent.length} chars`);
+            await blogArticles.updateOne(
+              { _id: insertedId },
+              { 
+                $set: { 
+                  content: accumulatedContent,
+                  updatedAt: new Date()
+                } 
+              }
+            );
+            lastUpdateTime = now;
+          }
         };
         
         const { article, fullResponse } = await invokerModule.invokeBlogAgent(
@@ -673,14 +680,16 @@ async function handleArticleStream(req, res, articleId) {
     // Send initial article state
     const article = await blogArticles.findOne({ _id });
     if (!article) {
+      console.log(`[article-stream] Article not found: ${articleId}`);
       res.write(`data: ${JSON.stringify({ error: 'not_found' })}\n\n`);
       res.end();
       return;
     }
     
+    console.log(`[article-stream] Initial state - status: ${article.status}, content length: ${article.content?.length || 0}`);
     res.write(`data: ${JSON.stringify({ 
       title: article.title,
-      content: article.content,
+      content: article.content || '',
       status: article.status 
     })}\n\n`);
     
@@ -732,7 +741,7 @@ async function handleArticleStream(req, res, articleId) {
           clearInterval(pollInterval);
           res.end();
         }
-      }, 500); // Poll every 500ms
+      }, 200); // Poll every 200ms for more responsive updates
       
       // Clean up on disconnect
       req.on('close', () => {
