@@ -289,6 +289,52 @@ h1 {
   margin-bottom: var(--spacing-sm);
 }
 
+/* Main document title - only on first page */
+h1.main-doc-title {
+  font-size: 48px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin-bottom: var(--spacing-sm);
+  animation: titleFadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Section title when shown as main header */
+h1.section-as-title {
+  font-size: 36px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin-top: 0;
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  animation: sectionTitleSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes titleFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sectionTitleSlide {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 h2 {
   font-size: 32px;
   font-weight: 600;
@@ -488,6 +534,16 @@ hr {
 /* Content sections */
 .content-section {
   margin-bottom: var(--spacing-xxl);
+}
+
+/* Content section when main title is hidden - reclaim vertical space */
+.content-section.no-main-title {
+  margin-top: calc(var(--spacing-sm) * -1);
+}
+
+/* Hide duplicate H2 headers in markdown when shown as section title */
+.content-section.no-main-title .md > h2:first-child {
+  display: none;
 }
 
 /* Loading state */

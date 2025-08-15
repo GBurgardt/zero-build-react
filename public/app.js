@@ -146,11 +146,13 @@ export default function App() {
     // Buscar por id de sección en el mapa
     if (sectionMap[route.section]) {
       const currentItem = toc.find(t => t.id === route.section);
-      const header = currentItem ? `## ${currentItem.title}\n\n` : '';
+      // Only add header if it's the first section (where main title is shown)
+      const isFirstSection = toc.length > 0 && toc[0].id === route.section;
+      const header = (currentItem && isFirstSection) ? `## ${currentItem.title}\n\n` : '';
       return header + sectionMap[route.section];
     }
     return "Sección no encontrada";
-  }, [detail.result, route.section, sectionMap]);
+  }, [detail.result, route.section, sectionMap, toc]);
 
   // Si no hay sección seleccionada pero tenemos índice, seleccionar la primera
   useEffect(() => {
@@ -341,6 +343,16 @@ export default function App() {
 
   // Views
   if (route.mode === "detail") {
+    // Check if we're on the first section
+    const isFirstSection = !route.section || (toc.length > 0 && toc[0].id === route.section);
+    
+    // Get current section title for non-first sections
+    const currentSectionTitle = React.useMemo(() => {
+      if (isFirstSection || !route.section) return null;
+      const section = toc.find(t => t.id === route.section);
+      return section ? section.title : null;
+    }, [route.section, toc, isFirstSection]);
+    
     return React.createElement(
       React.Fragment,
       null,
@@ -361,13 +373,15 @@ export default function App() {
         },
         "← Volver"
       ),
-      // Main title
-      React.createElement("h1", null, mainTitle || "Idea"),
-      React.createElement("p", { className: "meta" }, `ID: ${route.ideaId}`),
+      // Main title - only show on first section
+      isFirstSection && React.createElement("h1", { className: "main-doc-title" }, mainTitle || "Idea"),
+      isFirstSection && React.createElement("p", { className: "meta" }, `ID: ${route.ideaId}`),
+      // Section title as primary header when not on first section
+      !isFirstSection && currentSectionTitle && React.createElement("h1", { className: "section-as-title" }, currentSectionTitle),
       // Main content
       React.createElement(
         "div",
-        { className: "content-section" },
+        { className: `content-section ${!isFirstSection ? 'no-main-title' : ''}` },
         detail.loading
           ? React.createElement("p", { className: "loading-elegant" }, "Cargando…")
           : htmlContent
