@@ -9,12 +9,12 @@ export const availableModes = {
 
 const config = {
   model: "gpt-5",
-  defaultMode: "pete-komon",
-  getSystemPrompt: (mode = "pete-komon") => {
+  defaultMode: "german-burgart",
+  getSystemPrompt: (mode = "german-burgart") => {
     const selected = availableModes[mode];
     if (!selected) {
       console.warn(`[blog-agent-openai] Mode "${mode}" not found, using default`);
-      return availableModes["pete-komon"].systemPrompt;
+      return availableModes["german-burgart"].systemPrompt;
     }
     return selected.systemPrompt;
   },

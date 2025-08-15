@@ -782,6 +782,8 @@ const server = http.createServer(async (req, res) => {
     const params = Object.fromEntries(url.searchParams.entries());
     const ua = String(req.headers['user-agent'] || '').slice(0, 120);
     console.log('[zero-api] PING', { t: new Date().toISOString(), path: url.pathname, ...params, ua });
+    console.log('🎯 TEST LOG: Este es un mensaje de prueba para verificar que logs.sh funciona correctamente!');
+    console.log('📊 Métricas:', { memory: process.memoryUsage().heapUsed / 1024 / 1024 + ' MB', uptime: process.uptime() + 's' });
     return json(res, 200, { ok: true, t: Date.now(), path: url.pathname, params });
   }
   if (req.method === 'POST' && url.pathname === '/chat') return handleChat(req, res);
