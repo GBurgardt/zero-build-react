@@ -271,18 +271,36 @@ export default function App() {
     }
   }, [mdLib, purifyLib, currentContent]);
 
-  const loadIdeas = async () => {
+  // Home list state (search + pagination)
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 10;
+
+  const loadIdeas = async (opts = {}) => {
+    const q = opts.q ?? query;
+    const p = opts.page ?? page;
     try {
-      const r = await fetch("/zero-api/ideas");
+      const params = new URLSearchParams({ page: String(p), pageSize: String(pageSize) });
+      if (q && q.trim()) params.set('q', q.trim());
+      const r = await fetch(`/zero-api/ideas?${params.toString()}`);
       if (!r.ok) return;
       const data = await r.json();
       if (Array.isArray(data.items)) setIdeas(data.items);
+      if (typeof data.totalCount === 'number') setTotalCount(data.totalCount);
+      if (typeof data.page === 'number') setPage(data.page);
     } catch (error) {
       // Silent fail on ideas load
     }
   };
 
-  useEffect(() => { loadIdeas(); }, []);
+  useEffect(() => { loadIdeas({ page: 1 }); }, []);
+
+  // Debounced search
+  useEffect(() => {
+    const h = setTimeout(() => { loadIdeas({ q: query, page: 1 }); }, 350);
+    return () => clearTimeout(h);
+  }, [query]);
 
   const upsertIdea = (draft) => {
     setIdeas((prev) => {
@@ -560,6 +578,37 @@ export default function App() {
       ),
       // Main title - only show on first section
       isFirstSection && React.createElement("h1", { className: "main-doc-title" }, mainTitle || "Idea"),
+      // Inline controls to generate Article/Pragmatic from THIS idea
+      React.createElement(
+        "div",
+        { className: "composer", style: { marginTop: 12, marginBottom: 12 } },
+        React.createElement(
+          "div",
+          { className: "composer-controls", style: { display: 'flex', gap: 12 } },
+          React.createElement(
+            "select",
+            { value: selectedModel, onChange: (e) => setSelectedModel(e.target.value), className: "model-dropdown", "aria-label": "Modelo" },
+            React.createElement("option", { value: "gpt-5" }, "GPT-5"),
+            React.createElement("option", { value: "claude-opus" }, "Claude Opus 4.1")
+          ),
+          React.createElement(
+            "select",
+            { value: docType, onChange: (e) => setDocType(e.target.value), className: "model-dropdown", "aria-label": "Tipo" },
+            React.createElement("option", { value: "article" }, "Artículo"),
+            React.createElement("option", { value: "pragmatic" }, "Pragmático")
+          )
+        ),
+        React.createElement(
+          "div",
+          { className: "composer-main", style: { marginTop: 8 } },
+          React.createElement("textarea", { value: userDirection, onChange: (e) => setUserDirection(e.target.value), rows: 2, placeholder: "Dirección breve (opcional)", className: "input-field", "aria-label": "Dirección breve" }),
+          React.createElement(
+            "button",
+            { onClick: async () => { try { await generateFromIdea(route.ideaId); } catch (e) { alert(String(e?.message || e)); } }, className: "submit-button", title: "Crear" },
+            docType === 'article' ? 'Crear Artículo' : 'Crear Pragmático'
+          )
+        )
+      ),
       // Section title as primary header when not on first section
       !isFirstSection && currentSectionTitle && React.createElement("h1", { className: "section-as-title" }, currentSectionTitle),
       // Main content
@@ -762,10 +811,21 @@ export default function App() {
     ),
     errorMsg && React.createElement("div", { className: "error-elegant", style: { marginTop: '8px' } }, errorMsg),
 
-    // Ideas list
-    ideas.length > 0 && React.createElement(
+    // Search + Ideas list + Pagination
+    React.createElement(
       "div",
-      { className: "ideas-grid has-ideas" },
+      { className: `ideas-grid ${ideas.length > 0 ? 'has-ideas' : ''}` },
+      // Search bar
+      React.createElement(
+        "div",
+        { className: "searchbar", style: { marginBottom: '6px' } },
+        React.createElement("input", {
+          type: "text",
+          placeholder: "Search…",
+          value: query,
+          onChange: (e) => setQuery(e.target.value)
+        })
+      ),
       ...ideas.map((item) =>
         React.createElement(
           "a",
@@ -797,6 +857,53 @@ export default function App() {
             " • ",
             new Date(item.createdAt).toLocaleDateString()
           )
+        )
+      ),
+      // Pagination controls
+      React.createElement(
+        "div",
+        { style: { display: 'grid', gridTemplateColumns: '120px 1fr 120px', alignItems: 'center', gap: '8px', marginTop: '12px' } },
+        React.createElement(
+          "button",
+          {
+            onClick: () => { const p = Math.max(1, page - 1); setPage(p); loadIdeas({ page: p }); },
+            disabled: page <= 1,
+            className: "action-button",
+            title: "Previous page"
+          },
+          "← Prev"
+        ),
+        (() => {
+          const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+          const start = Math.max(1, Math.min(totalPages - 9, page - 4));
+          const end = Math.min(totalPages, start + 9);
+          const pages = [];
+          for (let i = start; i <= end; i++) pages.push(i);
+          return React.createElement(
+            "div",
+            { style: { display: 'flex', justifyContent: 'center', gap: '6px' } },
+            ...pages.map((p) => React.createElement(
+              "button",
+              {
+                key: `p-${p}`,
+                onClick: () => { setPage(p); loadIdeas({ page: p }); },
+                className: "action-button",
+                style: p === page ? { background: 'rgba(255,255,255,0.12)', borderColor: 'rgba(255,255,255,0.2)' } : null,
+                title: `Go to page ${p}`
+              },
+              String(p)
+            ))
+          );
+        })(),
+        React.createElement(
+          "button",
+          {
+            onClick: () => { const maxP = Math.max(1, Math.ceil(totalCount / pageSize)); const p = Math.min(maxP, page + 1); setPage(p); loadIdeas({ page: p }); },
+            disabled: page >= Math.ceil(totalCount / pageSize),
+            className: "action-button",
+            title: "Next page"
+          },
+          "Next →"
         )
       )
     )

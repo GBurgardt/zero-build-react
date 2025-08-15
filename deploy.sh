@@ -57,6 +57,33 @@ for file in $(find . -name "*.json" | grep -v node_modules | grep -v ".git"); do
   fi
 done
 
+# Verificar archivos CSS (sintaxis básica)
+for file in $(find . -name "*.css" | grep -v node_modules | grep -v ".git"); do
+  # Verificar paréntesis y llaves balanceadas usando Python
+  if ! python3 -c "
+import sys
+try:
+    with open('$file', 'r') as f:
+        content = f.read()
+        # Remover comentarios CSS
+        import re
+        content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
+        
+        # Contar llaves y paréntesis
+        open_braces = content.count('{')
+        close_braces = content.count('}')
+        open_parens = content.count('(')
+        close_parens = content.count(')')
+        
+        if open_braces != close_braces or open_parens != close_parens:
+            sys.exit(1)
+except:
+    sys.exit(1)
+" 2>/dev/null; then
+    echo -e "${RED}✗ Posible error de sintaxis CSS en $file (llaves o paréntesis desbalanceados)${NC}"
+    ERRORS_FOUND=true
+  fi
+done
 
 # Si hay errores, detener el deploy
 if [ "$ERRORS_FOUND" = true ]; then

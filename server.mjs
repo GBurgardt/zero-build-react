@@ -68,6 +68,8 @@ async function getDb() {
     const db = mongoClient.db(dbName);
     ideasCollection = db.collection('ideas');
     try { await ideasCollection.createIndex({ createdAt: -1 }); } catch (_) {}
+    // Useful index for server-side search
+    try { await ideasCollection.createIndex({ text: 'text', result: 'text' }); } catch (_) {}
     blogArticlesCollection = db.collection('blog_articles');
     pragmaticDocsCollection = db.collection('pragmatic_docs');
     try { await blogArticlesCollection.createIndex({ createdAt: -1 }); } catch (_) {}
@@ -438,8 +440,37 @@ async function handleIdeaStatus(req, res, id) {
 async function handleListIdeas(req, res) {
   try {
     const { ideas } = await getDb();
-    const list = await ideas.find({}, { projection: { text: 1, status: 1, model: 1, createdAt: 1 } }).sort({ createdAt: -1 }).limit(50).toArray();
-    return json(res, 200, { items: list.map(i => ({ id: String(i._id), text: i.text, status: i.status, model: i.model, createdAt: i.createdAt })) });
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const q = String(url.searchParams.get('q') || '').trim();
+    const page = Math.max(1, Math.min(1000, parseInt(url.searchParams.get('page') || '1', 10) || 1));
+    const pageSizeRaw = parseInt(url.searchParams.get('pageSize') || '10', 10) || 10;
+    const pageSize = Math.max(1, Math.min(50, pageSizeRaw));
+
+    // Build filter: prefer $text if available, fallback to regex OR
+    let filter = {};
+    if (q) {
+      filter = {
+        $or: [
+          { $text: { $search: q } },
+          { text: { $regex: q, $options: 'i' } },
+          { result: { $regex: q, $options: 'i' } },
+        ]
+      };
+    }
+
+    const totalCount = await ideas.countDocuments(filter);
+    const skip = (page - 1) * pageSize;
+    const cursor = ideas.find(filter, { projection: { text: 1, status: 1, model: 1, createdAt: 1 } })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(pageSize);
+    const list = await cursor.toArray();
+    return json(res, 200, {
+      items: list.map(i => ({ id: String(i._id), text: i.text, status: i.status, model: i.model, createdAt: i.createdAt })),
+      page,
+      pageSize,
+      totalCount,
+    });
   } catch (e) {
     return json(res, 500, { error: 'server_error', detail: String(e?.message || e) });
   }
