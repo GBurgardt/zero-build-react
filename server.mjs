@@ -488,75 +488,98 @@ async function handleGenerateArticle(req, res, ideaId) {
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
     const modelRaw = String(body.model || '').toLowerCase();
     const useClaude = modelRaw === 'claude' || modelRaw === 'claude-opus' || modelRaw.includes('claude');
-    const useStream = body.stream === true;
-    
-    // Setup SSE headers for streaming
-    if (useStream) {
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-      });
-    }
     
     const originalInput = String(thought.text || '');
-    const fullExplanation = String(thought.result || thought.superinfo_raw || '');
-    const ideaContent = `INPUT ORIGINAL:\n\n${originalInput}\n\nEXPLICACIÓN COMPLETA:\n\n${fullExplanation}`;
-    const invokerModule = useClaude
-      ? await import('./server/agents/blog-article-agent-v2/invoker.mjs')
-      : await import('./server/agents/blog-article-agent-v2/invoker-openai.mjs');
-    const language = body.language === 'en' ? 'en' : 'es';
-    const mode = body.mode === 'german-burgart' ? 'german-burgart' : 'pete-komon';
-    const userDirection = String(body.userDirection || '').slice(0, 4000);
-    
-    let accumulatedContent = '';
-    const streamCallback = useStream ? (chunk) => {
-      accumulatedContent += chunk;
-      // Send SSE data
-      res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
-    } : null;
-    
-    const { article, fullResponse } = await invokerModule.invokeBlogAgent(
-      { ideaContent, ideaId, language, mode, userDirection },
-      streamCallback
-    );
-    
-    const content = String(article || '');
-    const titleMatch = (content.match(/^#\s+(.+)$/m) || [])[1];
-    const title = titleMatch || (originalInput || '').substring(0, 100) || 'Artículo';
     const now = new Date();
+    
+    // Create article immediately with processing status
     const { insertedId } = await blogArticles.insertOne({
       sourceIdeaId: _id,
-      title,
-      content,
-      language,
-      status: 'draft',
+      title: 'Generando artículo...',
+      content: '',
+      language: body.language === 'en' ? 'en' : 'es',
+      status: 'processing',
       createdAt: now,
       updatedAt: now,
-      raw: fullResponse,
+      raw: '',
       model: useClaude ? 'claude-opus' : 'gpt-5',
     });
     
-    if (useStream) {
-      // Send final event with article details
-      res.write(`data: ${JSON.stringify({ 
-        done: true, 
-        articleId: String(insertedId), 
-        redirectUrl: `/article/${String(insertedId)}` 
-      })}\n\n`);
-      res.end();
-    } else {
-      return json(res, 200, { success: true, articleId: String(insertedId), redirectUrl: `/article/${String(insertedId)}` });
-    }
+    // Immediately return article ID for redirect
+    json(res, 200, { 
+      success: true, 
+      articleId: String(insertedId), 
+      redirectUrl: `/article/${String(insertedId)}` 
+    });
+    
+    // Start generation in background
+    (async () => {
+      try {
+        const fullExplanation = String(thought.result || thought.superinfo_raw || '');
+        const ideaContent = `INPUT ORIGINAL:\n\n${originalInput}\n\nEXPLICACIÓN COMPLETA:\n\n${fullExplanation}`;
+        const invokerModule = useClaude
+          ? await import('./server/agents/blog-article-agent-v2/invoker.mjs')
+          : await import('./server/agents/blog-article-agent-v2/invoker-openai.mjs');
+        const language = body.language === 'en' ? 'en' : 'es';
+        const mode = body.mode === 'german-burgart' ? 'german-burgart' : 'pete-komon';
+        const userDirection = String(body.userDirection || '').slice(0, 4000);
+        
+        // Stream callback to update DB as content is generated
+        let accumulatedContent = '';
+        const streamCallback = async (chunk) => {
+          accumulatedContent += chunk;
+          // Update article in DB with partial content
+          await blogArticles.updateOne(
+            { _id: insertedId },
+            { 
+              $set: { 
+                content: accumulatedContent,
+                updatedAt: new Date()
+              } 
+            }
+          );
+        };
+        
+        const { article, fullResponse } = await invokerModule.invokeBlogAgent(
+          { ideaContent, ideaId, language, mode, userDirection },
+          streamCallback
+        );
+        
+        const content = String(article || '');
+        const titleMatch = (content.match(/^#\s+(.+)$/m) || [])[1];
+        const title = titleMatch || (originalInput || '').substring(0, 100) || 'Artículo';
+        
+        // Final update with complete content
+        await blogArticles.updateOne(
+          { _id: insertedId },
+          { 
+            $set: { 
+              title,
+              content,
+              status: 'completed',
+              raw: fullResponse,
+              updatedAt: new Date()
+            } 
+          }
+        );
+      } catch (e) {
+        console.error('[generate-article] Background generation error:', e);
+        // Update article status to error
+        await blogArticles.updateOne(
+          { _id: insertedId },
+          { 
+            $set: { 
+              status: 'error',
+              error: String(e?.message || e),
+              updatedAt: new Date()
+            } 
+          }
+        );
+      }
+    })();
   } catch (e) {
     console.error('[generate-article] ERROR', e);
-    if (res.headersSent) {
-      res.write(`data: ${JSON.stringify({ error: 'generation_failed', detail: String(e?.message || e) })}\n\n`);
-      res.end();
-    } else {
-      return json(res, 500, { error: 'generation_failed', detail: String(e?.message || e) });
-    }
+    return json(res, 500, { error: 'generation_failed', detail: String(e?.message || e) });
   }
 }
 
@@ -612,9 +635,99 @@ async function handleGetArticle(req, res, articleId) {
     const _id = new ObjectId(articleId);
     const doc = await blogArticles.findOne({ _id });
     if (!doc) return json(res, 404, { error: 'not_found' });
-    return json(res, 200, { _id: String(doc._id), title: doc.title, content: doc.content, language: doc.language, status: doc.status, createdAt: doc.createdAt, updatedAt: doc.updatedAt });
+    return json(res, 200, { 
+      _id: String(doc._id), 
+      title: doc.title, 
+      content: doc.content, 
+      status: doc.status, 
+      model: doc.model, 
+      createdAt: doc.createdAt, 
+      updatedAt: doc.updatedAt 
+    });
   } catch (e) {
     return json(res, 500, { error: 'server_error', detail: String(e?.message || e) });
+  }
+}
+
+async function handleArticleStream(req, res, articleId) {
+  try {
+    const { blogArticles } = await getDb();
+    const _id = new ObjectId(articleId);
+    
+    // Set up SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    });
+    
+    // Send initial article state
+    const article = await blogArticles.findOne({ _id });
+    if (!article) {
+      res.write(`data: ${JSON.stringify({ error: 'not_found' })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    res.write(`data: ${JSON.stringify({ 
+      title: article.title,
+      content: article.content,
+      status: article.status 
+    })}\n\n`);
+    
+    // If article is processing, poll for updates
+    if (article.status === 'processing') {
+      let lastContent = article.content || '';
+      const pollInterval = setInterval(async () => {
+        try {
+          const updated = await blogArticles.findOne({ _id });
+          if (!updated) {
+            clearInterval(pollInterval);
+            res.end();
+            return;
+          }
+          
+          // Send only new content
+          if (updated.content !== lastContent) {
+            const newContent = updated.content.substring(lastContent.length);
+            res.write(`data: ${JSON.stringify({ 
+              chunk: newContent,
+              status: updated.status 
+            })}\n\n`);
+            lastContent = updated.content;
+          }
+          
+          // Stop polling when done
+          if (updated.status !== 'processing') {
+            res.write(`data: ${JSON.stringify({ 
+              done: true,
+              title: updated.title,
+              status: updated.status 
+            })}\n\n`);
+            clearInterval(pollInterval);
+            res.end();
+          }
+        } catch (e) {
+          console.error('[article-stream] Poll error:', e);
+          clearInterval(pollInterval);
+          res.end();
+        }
+      }, 500); // Poll every 500ms
+      
+      // Clean up on disconnect
+      req.on('close', () => {
+        clearInterval(pollInterval);
+      });
+    } else {
+      // Article is complete, end stream
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+    }
+  } catch (e) {
+    console.error('[article-stream] ERROR', e);
+    res.write(`data: ${JSON.stringify({ error: 'stream_error', detail: String(e?.message || e) })}\n\n`);
+    res.end();
   }
 }
 
@@ -687,6 +800,8 @@ const server = http.createServer(async (req, res) => {
   // Readers
   const artGet = url.pathname.match(/^\/(?:zero-api\/)?article\/(\w{24})$/);
   if (req.method === 'GET' && artGet) return handleGetArticle(req, res, artGet[1]);
+  const artStream = url.pathname.match(/^\/(?:zero-api\/)?article\/(\w{24})\/stream$/);
+  if (req.method === 'GET' && artStream) return handleArticleStream(req, res, artStream[1]);
   const pragGet = url.pathname.match(/^\/(?:zero-api\/)?pragmatic\/(\w{24})$/);
   if (req.method === 'GET' && pragGet) return handleGetPragmatic(req, res, pragGet[1]);
   // Full payload for detail view

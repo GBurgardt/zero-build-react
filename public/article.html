@@ -17,12 +17,9 @@
         try {
           const m = location.pathname.match(/\/article\/(\w{24})/);
           if (!m) return;
-          const r = await fetch('/zero-api/article/' + m[1]);
-          const data = await r.json();
-          if (!r.ok) throw new Error(data.error || 'not_found');
-          document.getElementById('title').textContent = data.title || 'Artículo';
-          const content = String(data.content || '');
-          // Simple markdown fallback: show pre if marked unavailable
+          const articleId = m[1];
+          
+          // Simple markdown renderer
           const render = (md) => md
             .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
             .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
@@ -31,7 +28,57 @@
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/`([^`]+)`/g, '<code>$1</code>')
             .replace(/\n/g, '<br/>');
-          document.getElementById('content').innerHTML = render(content);
+          
+          // First, get initial article data
+          const r = await fetch('/zero-api/article/' + articleId);
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.error || 'not_found');
+          
+          document.getElementById('title').textContent = data.title || 'Generando artículo...';
+          let currentContent = data.content || '';
+          document.getElementById('content').innerHTML = currentContent ? render(currentContent) : '<p style="opacity: 0.6;">Generando contenido...</p>';
+          
+          // If article is still processing, connect to stream
+          if (data.status === 'processing') {
+            const eventSource = new EventSource('/zero-api/article/' + articleId + '/stream');
+            
+            eventSource.onmessage = function(event) {
+              try {
+                const streamData = JSON.parse(event.data);
+                
+                if (streamData.chunk) {
+                  // Append new content
+                  currentContent += streamData.chunk;
+                  document.getElementById('content').innerHTML = render(currentContent);
+                }
+                
+                if (streamData.title && streamData.title !== 'Generando artículo...') {
+                  document.getElementById('title').textContent = streamData.title;
+                }
+                
+                if (streamData.done) {
+                  eventSource.close();
+                  // Extract title from content if available
+                  const titleMatch = currentContent.match(/^#\s+(.+)$/m);
+                  if (titleMatch) {
+                    document.getElementById('title').textContent = titleMatch[1];
+                  }
+                }
+                
+                if (streamData.error) {
+                  eventSource.close();
+                  document.getElementById('content').innerHTML = '<pre>Error: ' + (streamData.error || 'Unknown error') + '</pre>';
+                }
+              } catch(e) {
+                console.error('Error parsing stream data:', e);
+              }
+            };
+            
+            eventSource.onerror = function(err) {
+              console.error('EventSource error:', err);
+              eventSource.close();
+            };
+          }
         } catch(e) {
           document.getElementById('content').innerHTML = '<pre>' + (e.message || String(e)) + '</pre>';
         }

@@ -358,28 +358,19 @@ export default function App() {
   }, [input, sending, selectedModel]);
 
   const [generatingArticle, setGeneratingArticle] = useState(false);
-  const [streamingContent, setStreamingContent] = useState('');
   
   const generateFromIdea = React.useCallback(async (id) => {
     if (!id) return;
     setGeneratingArticle(true);
-    setStreamingContent('');
     
     const body = docType === 'article'
-      ? { model: selectedModel, language: 'es', mode: 'pete-komon', userDirection, stream: true }
+      ? { model: selectedModel, language: 'es', mode: 'pete-komon', userDirection }
       : { model: selectedModel, direction: userDirection };
     const path = docType === 'article'
       ? `/zero-api/ideas/${id}/generate-article`
       : `/zero-api/ideas/${id}/generate-pragmatic`;
     
     try {
-      // Use EventSource for streaming
-      const eventSource = new EventSource(`${path}?${new URLSearchParams({ 
-        ...body,
-        stream: 'true' 
-      })}`);
-      
-      // For POST with EventSource, we need to use fetch with a different approach
       const resp = await fetch(path, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
@@ -391,50 +382,14 @@ export default function App() {
         throw new Error(data.detail || data.error || 'Error generando');
       }
       
-      // If streaming is supported in response
-      if (resp.headers.get('content-type')?.includes('text/event-stream')) {
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          const text = decoder.decode(value);
-          const lines = text.split('\n');
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.chunk) {
-                  setStreamingContent(prev => prev + data.chunk);
-                }
-                if (data.done && data.redirectUrl) {
-                  window.location.href = data.redirectUrl;
-                  return;
-                }
-                if (data.error) {
-                  throw new Error(data.detail || data.error || 'Error generando');
-                }
-              } catch (e) {
-                console.error('Error parsing SSE data:', e);
-              }
-            }
-          }
-        }
-      } else {
-        // Fallback to non-streaming response
-        const data = await resp.json();
-        if (data.redirectUrl) {
-          window.location.href = data.redirectUrl;
-        }
+      const data = await resp.json();
+      if (data.redirectUrl) {
+        // Redirect to article page immediately
+        window.location.href = data.redirectUrl;
       }
     } catch (e) {
       alert(String(e?.message || e));
-    } finally {
       setGeneratingArticle(false);
-      setStreamingContent('');
     }
   }, [docType, selectedModel, userDirection]);
 
