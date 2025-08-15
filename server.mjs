@@ -40,8 +40,20 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'; // Set OPENAI_MODEL=gpt-5 if available
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/zerodb';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5';
+
+console.log('[startup] Server initialization:');
+console.log('[startup] PORT:', PORT);
+console.log('[startup] OPENAI_API_KEY present:', !!OPENAI_API_KEY);
+console.log('[startup] ANTHROPIC_API_KEY present:', !!ANTHROPIC_API_KEY);
+console.log('[startup] ANTHROPIC_API_KEY length:', ANTHROPIC_API_KEY?.length || 0);
+console.log('[startup] DEFAULT_MODEL:', DEFAULT_MODEL);
+console.log('[startup] OPENAI_MODEL:', OPENAI_MODEL);
+
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const anthropic = ANTHROPIC_API_KEY ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
+
+console.log('[startup] OpenAI client initialized:', !!openai);
+console.log('[startup] Anthropic client initialized:', !!anthropic);
 
 let mongoClient;
 let ideasCollection;
@@ -190,10 +202,21 @@ async function handleCreateIdea(req, res) {
     
     // Elegir procesador según modelo
     const model = body.model || 'gpt-5';
+    console.log('[handleCreateIdea] Selected model:', model);
+    console.log('[handleCreateIdea] Starting async processing for id:', String(insertedId));
+    
     if (model === 'claude-opus') {
-      processWithClaude(insertedId).catch(err => console.error('processWithClaude error', err));
+      console.log('[handleCreateIdea] Routing to processWithClaude...');
+      processWithClaude(insertedId).catch(err => {
+        console.error('[handleCreateIdea] processWithClaude error:', err);
+        console.error('[handleCreateIdea] Error details:', JSON.stringify(err, null, 2));
+      });
     } else {
-      processIdea(insertedId).catch(err => console.error('processIdea error', err));
+      console.log('[handleCreateIdea] Routing to processIdea (GPT-5)...');
+      processIdea(insertedId).catch(err => {
+        console.error('[handleCreateIdea] processIdea error:', err);
+        console.error('[handleCreateIdea] Error details:', JSON.stringify(err, null, 2));
+      });
     }
     
     return json(res, 200, { id: String(insertedId), status: 'processing' });
@@ -206,16 +229,37 @@ async function processWithClaude(id) {
   const { ideas } = await getDb();
   const _id = new ObjectId(id);
   const doc = await ideas.findOne({ _id });
-  if (!doc || !anthropic) return;
+  
+  console.log('[claude] Starting processWithClaude for id:', id);
+  console.log('[claude] Document found:', !!doc);
+  console.log('[claude] Anthropic client initialized:', !!anthropic);
+  console.log('[claude] ANTHROPIC_API_KEY present:', !!ANTHROPIC_API_KEY);
+  
+  if (!doc) {
+    console.error('[claude] ERROR: Document not found for id:', id);
+    return;
+  }
+  
+  if (!anthropic) {
+    console.error('[claude] ERROR: Anthropic client not initialized');
+    console.error('[claude] API Key present:', !!ANTHROPIC_API_KEY);
+    await ideas.updateOne({ _id }, { $set: { status: 'error', error: 'Claude not configured', updatedAt: new Date() } });
+    return;
+  }
   
   try {
     console.log('[claude] Processing with Claude Opus 4.1...');
+    console.log('[claude] Input text length:', doc.text?.length || 0);
     
     // Paso 1: Super Information con Claude
     const superInfoMessages = [{
       role: 'user',
       content: superInfoUser.replace('{input}', doc.text)
     }];
+    
+    console.log('[claude] Creating super info request...');
+    console.log('[claude] System prompt length:', superInfoSystem?.length || 0);
+    console.log('[claude] User message:', superInfoMessages[0]?.content?.substring(0, 100) + '...');
     
     const superInfoResponse = await anthropic.messages.create({
       model: 'claude-3-opus-20240229', // Claude Opus 4.1
@@ -224,6 +268,10 @@ async function processWithClaude(id) {
       system: superInfoSystem,
       messages: superInfoMessages
     });
+    
+    console.log('[claude] Super info response received');
+    console.log('[claude] Response type:', typeof superInfoResponse);
+    console.log('[claude] Response content array length:', superInfoResponse.content?.length || 0);
     
     const superText = superInfoResponse.content[0]?.text || '';
     const superinfo = (superText.match(/<superinfo>([\s\S]*?)<\/superinfo>/i)?.[1] || superText).trim();
@@ -235,6 +283,10 @@ async function processWithClaude(id) {
       content: `${bukUser}\nInput: ${superinfo}`
     }];
     
+    console.log('[claude] Creating Bukowski request...');
+    console.log('[claude] Bukowski system prompt length:', bukSystem?.length || 0);
+    console.log('[claude] Bukowski input length:', superinfo?.length || 0);
+    
     const bukResponse = await anthropic.messages.create({
       model: 'claude-3-opus-20240229', // Claude Opus 4.1
       max_tokens: 8000,
@@ -243,6 +295,9 @@ async function processWithClaude(id) {
       messages: bukMessages
     });
     
+    console.log('[claude] Bukowski response received');
+    console.log('[claude] Response content array length:', bukResponse.content?.length || 0);
+    
     const bukText = bukResponse.content[0]?.text || '';
     const resume = (bukText.match(/<resume>([\s\S]*?)<\/resume>/i)?.[1] || bukText).trim();
     
@@ -250,8 +305,24 @@ async function processWithClaude(id) {
     await ideas.updateOne({ _id }, { $set: { status: 'done', result: resume, toc, sections, updatedAt: new Date() } });
     
     console.log('[claude] Processing completed successfully');
+    console.log('[claude] Final result length:', resume?.length || 0);
   } catch (e) {
-    console.error('[claude] Error:', e);
+    console.error('[claude] ERROR in processWithClaude:', e);
+    console.error('[claude] Error name:', e?.name);
+    console.error('[claude] Error message:', e?.message);
+    console.error('[claude] Error stack:', e?.stack);
+    
+    // Check for specific Anthropic API errors
+    if (e?.status) {
+      console.error('[claude] API Status Code:', e.status);
+    }
+    if (e?.error?.type) {
+      console.error('[claude] API Error Type:', e.error.type);
+    }
+    if (e?.error?.message) {
+      console.error('[claude] API Error Message:', e.error.message);
+    }
+    
     await ideas.updateOne({ _id }, { $set: { status: 'error', error: String(e?.message || e), updatedAt: new Date() } });
   }
 }
