@@ -6,6 +6,9 @@ import https from 'node:https';
 import { readFileSync, existsSync } from 'node:fs';
 import { URL } from 'node:url';
 import { MongoClient, ObjectId } from 'mongodb';
+
+// Store active SSE connections for direct streaming
+const activeStreams = new Map();
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { systemPrompt as superInfoSystem, userPrompt as superInfoUser } from './server/prompts/superinformation.prompt.mjs';
@@ -477,6 +480,157 @@ async function handleListIdeas(req, res) {
 }
 
 // ===== New handlers: Article/Pragmatic generation and readers =====
+
+// New direct streaming endpoint
+async function handleGenerateArticleStream(req, res, ideaId) {
+  try {
+    const { ideas, blogArticles } = await getDb();
+    const _id = new ObjectId(ideaId);
+    const thought = await ideas.findOne({ _id });
+    if (!thought) return json(res, 404, { error: 'idea_not_found' });
+    
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    const modelRaw = String(body.model || '').toLowerCase();
+    const useClaude = modelRaw === 'claude' || modelRaw === 'claude-opus' || modelRaw.includes('claude');
+    
+    const originalInput = String(thought.text || '');
+    const now = new Date();
+    
+    // Create article immediately with processing status
+    const { insertedId } = await blogArticles.insertOne({
+      sourceIdeaId: _id,
+      title: 'Generando artículo...',
+      content: '',
+      language: body.language === 'en' ? 'en' : 'es',
+      status: 'processing',
+      createdAt: now,
+      updatedAt: now,
+      raw: '',
+      model: useClaude ? 'claude-opus' : 'gpt-5',
+    });
+    
+    // Set up SSE for direct streaming
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'X-Accel-Buffering': 'no',
+    });
+    
+    // Immediately flush headers to establish connection
+    res.flushHeaders();
+    
+    // Send initial response with article ID
+    res.write(`data: ${JSON.stringify({ 
+      articleId: String(insertedId),
+      status: 'starting'
+    })}\n\n`);
+    if (res.flush) res.flush();
+    
+    // Store connection for direct streaming
+    const streamKey = String(insertedId);
+    activeStreams.set(streamKey, res);
+    
+    // Clean up on disconnect
+    req.on('close', () => {
+      activeStreams.delete(streamKey);
+      console.log(`[stream] Client disconnected from ${streamKey}`);
+    });
+    
+    // Start generation with direct streaming
+    const fullExplanation = String(thought.result || thought.superinfo_raw || '');
+    const ideaContent = `INPUT ORIGINAL:\n\n${originalInput}\n\nEXPLICACIÓN COMPLETA:\n\n${fullExplanation}`;
+    const invokerModule = useClaude
+      ? await import('./server/agents/blog-article-agent-v2/invoker.mjs')
+      : await import('./server/agents/blog-article-agent-v2/invoker-openai.mjs');
+    const language = body.language === 'en' ? 'en' : 'es';
+    const mode = 'german-burgart';
+    const userDirection = String(body.userDirection || '').slice(0, 4000);
+    
+    let accumulatedContent = '';
+    let chunkCount = 0;
+    let lastDbUpdate = Date.now();
+    
+    // Stream callback that sends directly to client
+    const streamCallback = async (chunk) => {
+      accumulatedContent += chunk;
+      chunkCount++;
+      
+      // Send chunk directly to client via SSE
+      if (activeStreams.has(streamKey)) {
+        res.write(`data: ${JSON.stringify({ 
+          chunk: chunk,
+          status: 'streaming'
+        })}\n\n`);
+        if (res.flush) res.flush();
+      }
+      
+      // Update DB periodically (non-blocking)
+      const now = Date.now();
+      if (chunkCount % 10 === 0 || (now - lastDbUpdate) > 1000) {
+        lastDbUpdate = now;
+        // Don't await - let it happen in background
+        blogArticles.updateOne(
+          { _id: insertedId },
+          { 
+            $set: { 
+              content: accumulatedContent,
+              updatedAt: new Date()
+            } 
+          }
+        ).catch(e => console.error('[stream] DB update error:', e));
+      }
+    };
+    
+    const { article, fullResponse } = await invokerModule.invokeBlogAgent(
+      { ideaContent, ideaId, language, mode, userDirection },
+      streamCallback
+    );
+    
+    const content = String(article || '');
+    const titleMatch = (content.match(/^#\s+(.+)$/m) || [])[1];
+    const title = titleMatch || (originalInput || '').substring(0, 100) || 'Artículo';
+    
+    // Final update
+    await blogArticles.updateOne(
+      { _id: insertedId },
+      { 
+        $set: { 
+          title,
+          content: accumulatedContent,
+          status: 'completed',
+          raw: fullResponse,
+          updatedAt: new Date()
+        } 
+      }
+    );
+    
+    // Send completion
+    if (activeStreams.has(streamKey)) {
+      res.write(`data: ${JSON.stringify({ 
+        done: true,
+        title,
+        status: 'completed'
+      })}\n\n`);
+      if (res.flush) res.flush();
+      res.end();
+      activeStreams.delete(streamKey);
+    }
+    
+  } catch (e) {
+    console.error('[generate-article-stream] ERROR', e);
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ error: String(e?.message || e) })}\n\n`);
+      res.end();
+    } else {
+      return json(res, 500, { error: 'generation_failed', detail: String(e?.message || e) });
+    }
+  }
+}
+
 async function handleGenerateArticle(req, res, ideaId) {
   try {
     const { ideas, blogArticles } = await getDb();
@@ -678,6 +832,12 @@ async function handleArticleStream(req, res, articleId) {
       'X-Accel-Buffering': 'no', // Disable nginx buffering for SSE
     });
     
+    // Immediately flush headers to establish connection
+    res.flushHeaders();
+    
+    // Send keep-alive comment to confirm connection
+    res.write(':ok\n\n');
+    
     // Send initial article state
     const article = await blogArticles.findOne({ _id });
     if (!article) {
@@ -693,6 +853,7 @@ async function handleArticleStream(req, res, articleId) {
       content: article.content || '',
       status: article.status 
     })}\n\n`);
+    if (res.flush) res.flush(); // Force flush if available
     
     // If article is processing, poll for updates
     if (article.status === 'processing') {
@@ -724,6 +885,7 @@ async function handleArticleStream(req, res, articleId) {
               chunk: newContent,
               status: updated.status 
             })}\n\n`);
+            if (res.flush) res.flush(); // Force flush if available
             lastContent = updated.content;
           }
           
@@ -734,6 +896,7 @@ async function handleArticleStream(req, res, articleId) {
               title: updated.title,
               status: updated.status 
             })}\n\n`);
+            if (res.flush) res.flush(); // Force flush if available
             clearInterval(pollInterval);
             res.end();
           }
@@ -825,6 +988,8 @@ const server = http.createServer(async (req, res) => {
   // Generation endpoints
   const genArticle = url.pathname.match(/^\/(?:zero-api\/)?ideas\/(\w{24})\/generate-article$/);
   if (req.method === 'POST' && genArticle) return handleGenerateArticle(req, res, genArticle[1]);
+  const genArticleStream = url.pathname.match(/^\/(?:zero-api\/)?ideas\/(\w{24})\/generate-article-stream$/);
+  if (req.method === 'POST' && genArticleStream) return handleGenerateArticleStream(req, res, genArticleStream[1]);
   const genPrag = url.pathname.match(/^\/(?:zero-api\/)?ideas\/(\w{24})\/generate-pragmatic$/);
   if (req.method === 'POST' && genPrag) return handleGeneratePragmatic(req, res, genPrag[1]);
 

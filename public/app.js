@@ -194,7 +194,7 @@ export default function App() {
       });
       
       // If article is still processing, connect to stream
-      if (data.status === 'processing') {
+      if (data.status === 'processing' || !data.content) {
         console.log('[Article] Connecting to stream for article:', articleId);
         const eventSource = new EventSource(`/zero-api/article/${articleId}/stream`);
         
@@ -496,32 +496,78 @@ export default function App() {
     setGeneratingArticle(true);
     
     const body = docType === 'article'
-      ? { model: selectedModel, language: 'es', mode: 'pete-komon', userDirection }
+      ? { model: selectedModel, language: 'es', mode: 'german-burgart', userDirection }
       : { model: selectedModel, direction: userDirection };
-    const path = docType === 'article'
-      ? `/zero-api/ideas/${id}/generate-article`
-      : `/zero-api/ideas/${id}/generate-pragmatic`;
     
-    try {
-      const resp = await fetch(path, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify(body) 
-      });
-      
-      if (!resp.ok) {
+    // Use streaming endpoint for articles  
+    if (docType === 'article') {
+      try {
+        // First POST to start generation with streaming
+        const streamPath = `/zero-api/ideas/${id}/generate-article-stream`;
+        const resp = await fetch(streamPath, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        
+        if (!resp.ok) {
+          const data = await resp.json();
+          throw new Error(data.detail || data.error || 'Failed to start generation');
+        }
+        
+        // Response is SSE stream - redirect immediately to see it
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.articleId) {
+                  // Redirect to article page
+                  window.location.href = `/zero/article/${data.articleId}`;
+                  return;
+                }
+              } catch (e) {
+                // Ignore parse errors
+              }
+            }
+          }
+        }
+      } catch (e) {
+        alert(String(e?.message || e));
+        setGeneratingArticle(false);
+      }
+    } else {
+      // Use regular endpoint for pragmatic
+      const path = `/zero-api/ideas/${id}/generate-pragmatic`;
+      try {
+        const resp = await fetch(path, { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(body) 
+        });
+        
+        if (!resp.ok) {
+          const data = await resp.json();
+          throw new Error(data.detail || data.error || 'Error generando');
+        }
+        
         const data = await resp.json();
-        throw new Error(data.detail || data.error || 'Error generando');
+        if (data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+        }
+      } catch (e) {
+        alert(String(e?.message || e));
+        setGeneratingArticle(false);
       }
-      
-      const data = await resp.json();
-      if (data.redirectUrl) {
-        // Redirect to article page immediately
-        window.location.href = data.redirectUrl;
-      }
-    } catch (e) {
-      alert(String(e?.message || e));
-      setGeneratingArticle(false);
     }
   }, [docType, selectedModel, userDirection]);
 
