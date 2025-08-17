@@ -8,9 +8,7 @@
     <link rel="dns-prefetch" href="https://esm.sh">
     <link rel="stylesheet" href="/zero/apple-style.css">
     <style>
-      :root {
-        color-scheme: dark;
-      }
+      :root { color-scheme: dark; }
       body { background: #000; color: #f5f5f7; margin: 0; font-family: ui-sans-serif, -apple-system, system-ui, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial; }
       .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
       .sidebar { border-right: 1px solid rgba(255,255,255,.08); padding: 16px 14px; background: #0a0a0a; }
@@ -67,6 +65,7 @@
           const React = await import('react');
           const { createRoot } = await import('react-dom/client');
           const { default: App } = await import('/public/mornings/app.js').catch(async () => {
+            // Fallback to /zero path if nginx maps /zero/ to /public/
             return await import('/zero/mornings/app.js');
           });
           createRoot(rootEl).render(React.createElement(App));
