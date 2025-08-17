@@ -80,7 +80,22 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const [activeTab, setActiveTab] = useState('Vision');
   const [daysMap, setDaysMap] = useState(() => loadStore());
-  const [rawInput, setRawInput] = useState('');
+  const [rawInput, setRawInput] = useState(`Buen día, esta es amor de otro fin. Son las diez, creo, de la mañana. Estoy arrancando. Vamos a empezar para agradecer. Te agradezco profundamente y el corazón por tener salud.
+Eh... Agradezco por mis amigos, por sentirme bien. Y me sano, bastante estable.
+Agradezco por... compañía ahora, viste, para que me siento cómodo y bueno, la relación sentimental, digamos. Agradezco por lo que estoy recibiendo. También agradezco por el laburo, por el trabajo, me gusta, bien, bien.
+Bueno, agradezco por tu familia anda bien. Que mis amigos dentro de todo andan bien. Les dejo partir a la gente que quiera anda bien, la gente que quiera. Disfrutan de casa, comida.
+Agradezco por los planes que tengo, por... Agradezco por mi nosotros también. Aquí hay cosas que me apasionan, que no tienen me llaman de la pasión para el día. Eso es muy importante la agradezco. La. Curiosidad, la pasión con lo que hago. Correcto, ya me de ahí sin precaución.
+No. Bueno, vamos con la visión. Los años me veo... tengo una normalidad en la que hacer con Elian, como la que pudimos hacer, pero más intensa.
+Estamos los dos ahí, siguiendo las estrategias empresariales, el producto que estamos creando que está muy bueno. Ahí teniendo charlas apasionadas por qué se sigue desarrollando el producto, pero bien cómodos, bien en esa situación. Luego tengo que dar una charla de IA porque una charla no, tengo que hacer un stream hablando para hacer recortes y subir porque tengo 20.000 seguidores y hablo de cosas que a la gente le interesa mucho escuchando hablar.
+Soy muy interesante igual que ahora, pero debería tener 20.000 seguidores. Entonces tengo 20.000.
+bueno seguramente va a estar bien acá en un lugar o no pero si viajando sintiéndome como y bien tengo confianza elevadísimo por estar tan activo estoy muy activo haciendo muchas cosas pero un estado de comodidad total. Voy a ser como un genio loco del stream, digamos. Con sentido de que voy a hablar de conciencia, de inteligencia artificiales, pero con un conocimiento muy profundo y unas opiniones muy locas.
+Y la gente me va a reconocer por la calle, básicamente.
+bueno dame un café Ay no sabe.
+Esa fue una charla con mi bosquero, ignorala, estoy haciendo el amor en rutin, mientras tanto. Bueno, retomando un poco... Bueno, la visión es un poco esa. No hay mucho más, digamos. Esa es un poco la idea de Luis Hernando, no? Y la intención para eso es, bueno, seguir en lo que hice ayer con Elian, por ejemplo, seguir activando esos activos de juntarme con Elian.
+activar más que nada la parte empresarial con él que es una parte de la visión y la otra parte de la visión es la parte de influencer que bueno la sigo activando, codeando mucho y eso. Estoy mucho por el hogar.
+Listo Gracias.
+Así solo.
+Todo lo del kiosco ignorado, porque fui a comprar huevo con dos kioscos distintos, pero bueno, eso no lo pongas en el resumen. Entonces, la intención es un poco esa, intensionar, ahí seguir con este camino..`);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [compare, setCompare] = useState([]); // array de fechas
@@ -99,7 +114,7 @@ export default function App() {
     setLoading(true); setError('');
     try {
       const prompt = buildPrompt(rawInput);
-      const resp = await fetch('/chat', {
+      const resp = await fetch('/zero-api/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'gpt-5', messages: [
           { role: 'system', content: systemPrompt },

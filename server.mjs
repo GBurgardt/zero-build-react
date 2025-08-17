@@ -979,6 +979,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, t: Date.now(), path: url.pathname, params });
   }
   if (req.method === 'POST' && url.pathname === '/chat') return handleChat(req, res);
+  if (req.method === 'POST' && url.pathname === '/zero-api/chat') return handleChat(req, res);
   // Support both direct and nginx-rewritten paths
   if (req.method === 'POST' && (url.pathname === '/zero-api/ideas' || url.pathname === '/ideas')) return handleCreateIdea(req, res);
   if (req.method === 'GET' && (url.pathname === '/zero-api/ideas' || url.pathname === '/ideas')) return handleListIdeas(req, res);
