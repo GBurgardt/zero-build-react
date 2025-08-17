@@ -19,7 +19,13 @@
     <div class="hud">
       <div>FPS: <strong id="fps">0</strong></div>
       <div>Círculos: <strong id="count">0</strong></div>
-      <div class="hint">Arrastrá para dibujar · Tecla <strong>C</strong> limpia</div>
+      <div>Modo: <strong id="mode">WASM</strong> · Update: <strong id="updateMs">0</strong> ms</div>
+      <div class="controls" style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+        <button id="toggleMode">Cambiar a JS</button>
+        <button id="benchmark">Benchmark 50k</button>
+        <button id="clear">Limpiar</button>
+      </div>
+      <div class="hint">Arrastrá para dibujar · Teclas <strong>C</strong> limpiar, <strong>T</strong> toggle modo</div>
     </div>
 
     <script src="app.js" type="module"></script>

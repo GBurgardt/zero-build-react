@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Grapple Rush (WASM)</title>
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; background: #0b0b0b; color: #e6e6e6; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial; }
+      #canvas { display: block; width: 100vw; height: 100vh; }
+      .hud { position: fixed; top: 10px; left: 12px; background: rgba(0,0,0,0.5); padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4; }
+      .hud strong { color: #9ae6b4; }
+      .controls { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+      button { background: #1f2937; color: #e5e7eb; border: 1px solid #374151; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+      button:hover { background: #374151; }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+
+    <div class="hud">
+      <div>FPS: <strong id="fps">0</strong> · Step: <strong id="step">0</strong> ms · Iter: <strong id="iters">0</strong></div>
+      <div>Rope: <strong id="ropeCount">0</strong> · State: <strong id="state">detached</strong></div>
+      <div class="controls">
+        <button id="attach">Attach</button>
+        <button id="detach">Detach</button>
+        <button id="stress">Stress 10k iters</button>
+        <button id="reset">Reset</button>
+      </div>
+      <div>Click para anclar el gancho. Arrastrá para mover el mouse-objetivo. Space: detach/attach.</div>
+    </div>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>

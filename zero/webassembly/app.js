@@ -138,6 +138,8 @@ class App {
         this.canvas = document.getElementById('canvas');
         this.renderer = new WebGLRenderer(this.canvas);
         this.wasmModule = null;
+        this.mode = 'WASM'; // 'WASM' | 'JS'
+        this.jsCircles = [];
         this.isDrawing = false;
         this.lastTime = performance.now();
         this.frameCount = 0;
@@ -195,6 +197,26 @@ class App {
     }
     
     setupEvents() {
+        const modeEl = document.getElementById('mode');
+        const updateMsEl = document.getElementById('updateMs');
+        const toggleBtn = document.getElementById('toggleMode');
+        const benchBtn = document.getElementById('benchmark');
+        const clearBtn = document.getElementById('clear');
+
+        toggleBtn.addEventListener('click', () => {
+            this.mode = this.mode === 'WASM' ? 'JS' : 'WASM';
+            modeEl.textContent = this.mode;
+            toggleBtn.textContent = this.mode === 'WASM' ? 'Cambiar a JS' : 'Cambiar a WASM';
+        });
+
+        benchBtn.addEventListener('click', () => {
+            this.runBenchmark(updateMsEl);
+        });
+
+        clearBtn.addEventListener('click', () => {
+            this.clearAll();
+        });
+
         // Mouse events
         this.canvas.addEventListener('mousedown', (e) => {
             this.isDrawing = true;
@@ -233,7 +255,10 @@ class App {
         // Keyboard
         window.addEventListener('keydown', (e) => {
             if (e.key === 'c' || e.key === 'C') {
-                this.wasmModule._clearCircles();
+                this.clearAll();
+            }
+            if (e.key === 't' || e.key === 'T') {
+                document.getElementById('toggleMode').click();
             }
         });
         
@@ -252,7 +277,11 @@ class App {
         for (let i = 0; i < 5; i++) {
             const offsetX = (Math.random() - 0.5) * 0.02;
             const offsetY = (Math.random() - 0.5) * 0.02;
-            this.wasmModule._addCircle(x + offsetX, y + offsetY);
+            if (this.mode === 'WASM') {
+                this.wasmModule._addCircle(x + offsetX, y + offsetY);
+            } else {
+                this.jsAddCircle(x + offsetX, y + offsetY);
+            }
         }
     }
     
@@ -264,7 +293,11 @@ class App {
         for (let i = 0; i < 5; i++) {
             const offsetX = (Math.random() - 0.5) * 0.02;
             const offsetY = (Math.random() - 0.5) * 0.02;
-            this.wasmModule._addCircle(x + offsetX, y + offsetY);
+            if (this.mode === 'WASM') {
+                this.wasmModule._addCircle(x + offsetX, y + offsetY);
+            } else {
+                this.jsAddCircle(x + offsetX, y + offsetY);
+            }
         }
     }
     
@@ -273,11 +306,23 @@ class App {
         const deltaTime = now - this.lastTime;
         this.lastTime = now;
         
-        // Update physics en WASM
-        this.wasmModule._updateCircles(deltaTime);
+        // Update physics según modo
+        const t0 = performance.now();
+        if (this.mode === 'WASM') {
+            this.wasmModule._updateCircles(deltaTime);
+        } else {
+            this.jsUpdateCircles(deltaTime);
+        }
+        const updateMs = performance.now() - t0;
+        const updateMsEl = document.getElementById('updateMs');
+        if (updateMsEl) updateMsEl.textContent = updateMs.toFixed(2);
         
         // Render con WebGL
-        this.renderer.render(this.wasmModule);
+        if (this.mode === 'WASM') {
+            this.renderer.render(this.wasmModule);
+        } else {
+            this.renderJS();
+        }
         
         // Update UI
         this.updateStats();
@@ -295,7 +340,99 @@ class App {
             this.lastFPSUpdate = now;
             
             document.getElementById('fps').textContent = this.fps;
-            document.getElementById('count').textContent = this.wasmModule._getCircleCount();
+            const count = this.mode === 'WASM' ? this.wasmModule._getCircleCount() : this.jsCircles.length;
+            document.getElementById('count').textContent = count;
+        }
+    }
+
+    // --- JS baseline (mismo modelo que C++) ---
+    jsAddCircle(x, y) {
+        const circle = {
+            x, y,
+            vx: (Math.random() * 100 - 50) * 0.001,
+            vy: (Math.random() * 100 - 50) * 0.001,
+            r: x,
+            g: 0.5,
+            b: 1 - x,
+            size: 3 + Math.floor(Math.random() * 20)
+        };
+        this.jsCircles.push(circle);
+    }
+
+    jsUpdateCircles(deltaTime) {
+        for (let i = 0; i < this.jsCircles.length; i++) {
+            const c = this.jsCircles[i];
+            c.x += c.vx * deltaTime;
+            c.y += c.vy * deltaTime;
+            if (c.x < 0 || c.x > 1) c.vx *= -0.9;
+            if (c.y < 0 || c.y > 1) c.vy *= -0.9;
+            c.vy += 0.00001 * deltaTime; // gravedad ligera
+            c.vx *= 0.999; c.vy *= 0.999; // damping
+        }
+    }
+
+    renderJS() {
+        const count = this.jsCircles.length;
+        if (count === 0) {
+            this.renderer.gl.clear(this.renderer.gl.COLOR_BUFFER_BIT);
+            return;
+        }
+        const positions = new Float32Array(count * 2);
+        const colors = new Float32Array(count * 3);
+        const sizes = new Float32Array(count);
+        for (let i = 0; i < count; i++) {
+            const c = this.jsCircles[i];
+            positions[i * 2] = c.x; positions[i * 2 + 1] = c.y;
+            colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+            sizes[i] = c.size;
+        }
+        // Usar el mismo pipeline del renderer
+        const gl = this.renderer.gl;
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(this.renderer.program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.renderer.positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(this.renderer.positionLoc);
+        gl.vertexAttribPointer(this.renderer.positionLoc, 2, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.renderer.colorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, colors, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(this.renderer.colorLoc);
+        gl.vertexAttribPointer(this.renderer.colorLoc, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.renderer.sizeBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, sizes, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(this.renderer.sizeLoc);
+        gl.vertexAttribPointer(this.renderer.sizeLoc, 1, gl.FLOAT, false, 0, 0);
+        gl.drawArrays(gl.POINTS, 0, count);
+    }
+
+    clearAll() {
+        this.wasmModule?._clearCircles();
+        this.jsCircles = [];
+    }
+
+    runBenchmark(updateMsEl) {
+        // Llena 50k desde cero y mide sólo la actualización de física
+        this.clearAll();
+        const N = 50000;
+        const seedPoints = () => ({ x: Math.random(), y: Math.random() });
+        if (this.mode === 'WASM') {
+            for (let i = 0; i < N; i++) {
+                const s = seedPoints();
+                this.wasmModule._addCircle(s.x, s.y);
+            }
+            const t0 = performance.now();
+            this.wasmModule._updateCircles(16.67);
+            const dt = performance.now() - t0;
+            updateMsEl.textContent = dt.toFixed(2);
+        } else {
+            for (let i = 0; i < N; i++) {
+                const s = seedPoints();
+                this.jsAddCircle(s.x, s.y);
+            }
+            const t0 = performance.now();
+            this.jsUpdateCircles(16.67);
+            const dt = performance.now() - t0;
+            updateMsEl.textContent = dt.toFixed(2);
         }
     }
 }

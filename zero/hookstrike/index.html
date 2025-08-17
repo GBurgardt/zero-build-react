@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hookstrike: Velocity Arena (WASM)</title>
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; background: #0b0b0b; color: #e6e6e6; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial; }
+      #canvas { display: block; width: 100vw; height: 100vh; }
+      .hud { position: fixed; top: 10px; left: 12px; background: rgba(0,0,0,0.5); padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4; }
+      .hud strong { color: #9ae6b4; }
+      .controls { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+      button { background: #1f2937; color: #e5e7eb; border: 1px solid #374151; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+      button:hover { background: #374151; }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+
+    <div class="hud">
+      <div>FPS: <strong id="fps">0</strong> · Step p95: <strong id="step">0</strong> ms · Iter: <strong id="iters">64</strong></div>
+      <div>Tiempo: <strong id="time">60.00</strong> · Combo: <strong id="combo">x1</strong> · Score: <strong id="score">0</strong></div>
+      <div>Objetivos rotos: <strong id="goals">0</strong> / 6 · Balas: <strong id="bullets">0</strong></div>
+      <div class="controls">
+        <button id="reset">Reset (R)</button>
+        <button id="stress">Stress</button>
+      </div>
+      <div>Teclado: WASD/Flechas mueven retícula · Space/J: anclar/desanclar · K/Shift: dash · R: reset</div>
+    </div>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
