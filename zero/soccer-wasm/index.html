@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />\n    <title>Air Hockey WASM</title>
+    <style>
+      html, body { margin:0; padding:0; height:100%; background:#0b0b0b; color:#e6e6e6; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Helvetica,Arial }
+      #canvas { display:block; width:100vw; height:100vh }
+      .hud { position:fixed; top:10px; left:12px; background:rgba(0,0,0,0.5); padding:8px 10px; border-radius:8px; font-size:12px }
+      .hud strong { color:#9ae6b4 }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <div class="hud">
+      <div>FPS <strong id="fps">0</strong> · Tiempo <strong id="time">90</strong> · Marcador <strong id="score">0 - 0</strong></div>
+      <div>Controles: Jugador 1 (WASD) · Jugador 2 (Flechas) · R reiniciar</div>
+    </div>
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
