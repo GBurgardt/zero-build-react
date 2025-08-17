@@ -123,6 +123,10 @@ ssh -i "$SSH_KEY" "$SSH_HOST" "
   cd '$REMOTE_DIR'
   git fetch --all --quiet
   git reset --hard origin/main --quiet
+  # Clean up legacy directories that may shadow file routes
+  if [ -d 'zero/mornings' ]; then
+    rm -rf 'zero/mornings'
+  fi
   echo '✓ Código actualizado'
 
   # Subir .env si no existe (se espera que lo subamos desde local, pero por si ya existe, no lo tocamos)

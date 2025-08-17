@@ -64,7 +64,7 @@
         try {
           const React = await import('react');
           const { createRoot } = await import('react-dom/client');
-          const { default: App } = await import('/public/mornings/app.js');
+          const { default: App } = await import('/zero/mornings-app.js');
           createRoot(rootEl).render(React.createElement(App));
         } catch (e) {
           rootEl.innerHTML = `<div class=\"panel\"><div class=\"error\">Error cargando UI: ${e.message}</div></div>`;
