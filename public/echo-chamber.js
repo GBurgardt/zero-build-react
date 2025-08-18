@@ -6,7 +6,7 @@ const GAME_HEIGHT = 600;
 const GRAVITY = 800;
 const PLAYER_SPEED = 250;
 const JUMP_VELOCITY = -400;
-const BULLET_SPEED = 400;
+const BULLET_SPEED = 600; // Aumentamos velocidad de balas
 const MAX_AMMO = 12;
 const RELOAD_TIME = 2000;
 
@@ -88,9 +88,15 @@ class EchoArena extends Phaser.Scene {
       facing: 'left'
     };
     
-    // Grupos de balas
-    this.playerBullets = this.physics.add.group();
-    this.echoBullets = this.physics.add.group();
+    // Grupos de balas con configuración especial
+    this.playerBullets = this.physics.add.group({
+      allowGravity: false,
+      immovable: false
+    });
+    this.echoBullets = this.physics.add.group({
+      allowGravity: false,
+      immovable: false
+    });
     
     // Colisiones
     this.physics.add.collider(this.player, this.platforms, () => {
@@ -117,8 +123,9 @@ class EchoArena extends Phaser.Scene {
     this.updateUI();
     
     // Aim indicator visual
-    this.aimIndicator = this.add.line(0, 0, 0, 0, 20, 0, 0x0a84ff, 0.5);
-    this.aimIndicator.setLineWidth(2);
+    this.aimIndicator = this.add.line(0, 0, 0, 0, 20, 0, 0x0a84ff, 0.8);
+    this.aimIndicator.setLineWidth(3);
+    this.aimIndicator.setDepth(10); // Asegurar que se vea encima
     
     console.log('[ECHO] Arena PLATFORMER ready!');
     console.log('[ECHO] Gravity:', GRAVITY);
@@ -317,15 +324,21 @@ class EchoArena extends Phaser.Scene {
   createBullet(x, y, angle, owner) {
     console.log('[ECHO] Creating bullet - Owner:', owner, 'Position:', x, y, 'Angle:', angle);
     
-    const bullet = this.add.circle(x, y, 3, owner === 'player' ? 0x0a84ff : 0xff453a);
+    const bullet = this.add.circle(x, y, 4, owner === 'player' ? 0x0a84ff : 0xff453a);
     this.physics.add.existing(bullet);
     
-    // Sin gravedad para las balas! Como en Contra
-    bullet.body.setGravityY(0);
+    // Configurar física de la bala correctamente
+    bullet.body.setGravityY(0); // Sin gravedad
+    bullet.body.setDrag(0, 0); // Sin fricción
+    bullet.body.setFriction(0, 0); // Sin fricción
+    bullet.body.setBounce(0); // Sin rebote
+    bullet.body.setAllowGravity(false); // Asegurar que no le afecte la gravedad
     
     const vx = Math.cos(angle) * BULLET_SPEED;
     const vy = Math.sin(angle) * BULLET_SPEED;
     bullet.body.setVelocity(vx, vy);
+    
+    console.log('[ECHO] Bullet velocity set - VX:', vx, 'VY:', vy, 'Speed:', BULLET_SPEED);
     
     if (owner === 'player') {
       this.playerBullets.add(bullet);
@@ -616,11 +629,18 @@ class EchoArena extends Phaser.Scene {
     // Show where player is aiming
     const { aimX, aimY } = this.playerState;
     const startX = this.player.x;
-    const startY = this.player.y - 10;
-    const endX = startX + (aimX * 30);
-    const endY = startY + (aimY * 30);
+    const startY = this.player.y - 16;
+    const endX = startX + (aimX * 40);
+    const endY = startY + (aimY * 40);
     
     this.aimIndicator.setTo(startX, startY, endX, endY);
+    
+    // Color change when ready to shoot
+    if (!this.playerState.shootCooldown && this.playerState.ammo > 0) {
+      this.aimIndicator.setStrokeStyle(3, 0x0a84ff, 1);
+    } else {
+      this.aimIndicator.setStrokeStyle(2, 0x666666, 0.5);
+    }
   }
   
   gameOver(playerWon) {
