@@ -979,6 +979,10 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, t: Date.now(), path: url.pathname, params });
   }
   if (req.method === 'POST' && url.pathname === '/chat') return handleChat(req, res);
+  // Duelista AI action endpoint (Cerebras Qwen with graceful fallback)
+  if (req.method === 'POST' && (url.pathname === '/duelista/act' || url.pathname === '/zero-api/duelista/act')) {
+    return handleDuelistaAct(req, res);
+  }
   if (req.method === 'POST' && url.pathname === '/zero-api/chat') return handleChat(req, res);
   // Support both direct and nginx-rewritten paths
   if (req.method === 'POST' && (url.pathname === '/zero-api/ideas' || url.pathname === '/ideas')) return handleCreateIdea(req, res);
@@ -1033,3 +1037,144 @@ server.listen(PORT, () => {
   console.log(`[zero-api] listening on http://127.0.0.1:${PORT}`);
   console.log('[zero-api] LOG-READY: para ver estos logs usa ./logs.sh api');
 });
+
+// ================= Duelista AI Proxy =================
+async function handleDuelistaAct(req, res) {
+  try {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const bodyStr = Buffer.concat(chunks).toString('utf8');
+    // The client may send XML or JSON. Accept both for simplicity.
+    let payload = null;
+    try { payload = JSON.parse(bodyStr || '{}'); } catch { payload = { xml: bodyStr }; }
+
+    const model = 'qwen-3-coder-480b';
+    const apiKey = process.env.CEREBRAS_API_KEY;
+
+    // If no key present, return a simple heuristic XML so the demo works offline
+    if (!apiKey) {
+      const heuristic = duelistaHeuristicActions(payload);
+      return json(res, 200, heuristic);
+    }
+
+    // Try dynamic import so the server doesn't crash if the SDK is not installed
+    let Cerebras = null;
+    try {
+      ({ default: Cerebras } = await import('@cerebras/cerebras_cloud_sdk'));
+    } catch (e) {
+      console.warn('[duelista] Cerebras SDK not installed, using heuristic fallback:', e?.message || e);
+      const heuristic = duelistaHeuristicActions(payload);
+      return json(res, 200, heuristic);
+    }
+
+    const cerebras = new Cerebras({ apiKey });
+    const system = buildDuelistaSystemPrompt();
+    const user = buildDuelistaUserPrompt(payload);
+
+    try {
+      const resp = await cerebras.chat.completions.create({
+        model,
+        stream: false,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        temperature: 0.4,
+        top_p: 0.9,
+        max_completion_tokens: 512,
+      });
+      const text = resp?.choices?.[0]?.message?.content || '';
+      const xml = extractXml(text) || text;
+      return json(res, 200, { xml, source: 'cerebras' });
+    } catch (e) {
+      // Graceful 429 / errors
+      console.warn('[duelista] Cerebras error, using heuristic fallback:', e?.message || e);
+      const heuristic = duelistaHeuristicActions(payload);
+      return json(res, 200, heuristic);
+    }
+  } catch (e) {
+    return json(res, 500, { error: 'server_error', detail: String(e?.message || e) });
+  }
+}
+
+function buildDuelistaSystemPrompt() {
+  return `You are the tactical controller of a 1v1 2D duel (side view). Respond ONLY with compact XML that respects the contract. Keep horizon short (<= 600ms) and prioritize safety and fairness. Avoid impossible actions.
+
+<contract>
+  <action name="microStep" dxMin="-1.0" dxMax="1.0" dyMin="-0.5" dyMax="0.5" durMsMin="40" durMsMax="180"/>
+  <action name="parry" dir="high|mid|low" whenMsMin="40" whenMsMax="180"/>
+  <action name="strike" kind="light|heavy" whenMsMin="80" whenMsMax="240"/>
+</contract>
+
+Return format:
+<actions t="TS">
+  <npc id="boss">
+    <microStep dx="..." dy="..." durMs="..."/>
+    <parry dir="mid" whenMs="..."/>
+    <strike kind="light" whenMs="..."/>
+    <why>short reason</why>
+  </npc>
+</actions>`;
+}
+
+function buildDuelistaUserPrompt(payload) {
+  // Accept either {xml} or structured JSON { t, player, boss, events }
+  if (payload && payload.xml) return String(payload.xml).slice(0, 5000);
+  const t = payload?.t || Date.now();
+  const p = payload?.player || {};
+  const b = payload?.boss || {};
+  const ev = Array.isArray(payload?.events) ? payload.events : [];
+  const xml = [
+    `<tick t="${t}">`,
+    `  <player x="${num(p.x)}" y="${num(p.y)}" vx="${num(p.vx)}" facing="${p.facing||'right'}" stamina="${num(p.stamina,0)}" lastAction="${p.lastAction||''}" lastTs="${p.lastTs||0}"/>`,
+    `  <npc id="boss" x="${num(b.x)}" y="${num(b.y)}" vx="${num(b.vx)}" facing="${b.facing||'left'}" stamina="${num(b.stamina,0)}" state="${b.state||'neutral'}"/>`,
+    `  <events>`,
+    ...ev.map(e => `    <event kind="${e.kind}" actor="${e.actor}" detail="${e.detail||''}" t="${e.t||t}"/>`),
+    `  </events>`,
+    `  <request actionsFor="boss" horizonMs="600" budget="2"/>`,
+    `</tick>`
+  ].join('\n');
+  return xml;
+}
+
+function num(v, def = 0) { return Number.isFinite(v) ? Number(v).toFixed(1) : def; }
+
+function extractXml(text) {
+  if (!text) return '';
+  const m = text.match(/<actions[\s\S]*?<\/actions>/i);
+  return m ? m[0] : '';
+}
+
+function duelistaHeuristicActions(payload) {
+  // Simple, fast, token-free: maintain preferred distance and parry heavy windups
+  try {
+    const t = payload?.t || Date.now();
+    const p = payload?.player || {};
+    const b = payload?.boss || {};
+    const events = Array.isArray(payload?.events) ? payload.events : [];
+    const dx = (p.x ?? 0) - (b.x ?? 0);
+    const absdx = Math.abs(dx);
+    const prefer = 120; // preferred spacing in pixels
+    let step = 0;
+    if (absdx < prefer - 10) step = dx > 0 ? -0.6 : 0.6; // back off if too close
+    else if (absdx > prefer + 20) step = dx > 0 ? 0.6 : -0.6; // approach if too far
+    const micro = `<microStep dx="${step.toFixed(1)}" dy="0.0" durMs="120"/>`;
+    const wind = events.find(e => e.kind === 'windup' && e.actor === 'player');
+    const parry = wind ? `<parry dir="mid" whenMs="120"/>` : '';
+    const strike = (!wind && absdx < 110) ? `<strike kind="light" whenMs="160"/>` : '';
+    const why = wind ? 'Backstep y parry tardío del heavy.' : (absdx > prefer ? 'Cerrar distancia con micro pasos.' : 'Mantener spacing y amenazar light.');
+    const xml = [
+      `<actions t="${t}">`,
+      `  <npc id="boss">`,
+      `    ${micro}`,
+      parry ? `    ${parry}` : '',
+      strike ? `    ${strike}` : '',
+      `    <why>${why}</why>`,
+      `  </npc>`,
+      `</actions>`
+    ].filter(Boolean).join('\n');
+    return { xml, source: 'heuristic' };
+  } catch (e) {
+    return { xml: `<actions t="${Date.now()}"><npc id="boss"><microStep dx="0.0" dy="0.0" durMs="80"/><why>fallback</why></npc></actions>`, source: 'heuristic' };
+  }
+}
