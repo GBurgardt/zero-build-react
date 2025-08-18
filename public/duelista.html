@@ -25,6 +25,42 @@
     </div>
     <div id="game"></div>
 
-    <script type="module" src="/zero/duelista.js"></script>
+    <!-- Fallback CDNs para Phaser -->
+    <script>
+      console.log('[DUELISTA-HTML] Iniciando carga de Phaser...');
+      const phaserCDNs = [
+        'https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js',
+        'https://unpkg.com/phaser@3.80.0/dist/phaser.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.0/phaser.min.js'
+      ];
+      
+      let cdnIndex = 0;
+      function loadPhaser() {
+        if (cdnIndex >= phaserCDNs.length) {
+          console.error('[DUELISTA-HTML] ERROR: No se pudo cargar Phaser de ninguna CDN');
+          document.getElementById('status').innerHTML = '<span class="warn">Error cargando Phaser</span>';
+          return;
+        }
+        
+        const script = document.createElement('script');
+        script.src = phaserCDNs[cdnIndex];
+        script.onload = () => {
+          console.log('[DUELISTA-HTML] Phaser cargado desde:', phaserCDNs[cdnIndex]);
+          // Cargar el juego después de que Phaser esté listo
+          const gameScript = document.createElement('script');
+          gameScript.type = 'module';
+          gameScript.src = '/zero/duelista.js';
+          document.body.appendChild(gameScript);
+        };
+        script.onerror = () => {
+          console.warn('[DUELISTA-HTML] Fallo CDN:', phaserCDNs[cdnIndex]);
+          cdnIndex++;
+          loadPhaser();
+        };
+        document.head.appendChild(script);
+      }
+      
+      loadPhaser();
+    </script>
   </body>
 </html>

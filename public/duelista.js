@@ -1,4 +1,5 @@
-import Phaser from 'https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.esm.js';
+// Phaser se carga como global desde el HTML
+console.log('[DUELISTA] Script iniciado, Phaser disponible:', typeof Phaser !== 'undefined');
 
 const GAME_W = 960;
 const GAME_H = 540;
@@ -288,6 +289,11 @@ class DuelScene extends Phaser.Scene {
   }
 }
 
+console.log('[DUELISTA] Verificando si Phaser está cargado:', typeof Phaser);
+if (typeof Phaser === 'undefined') {
+  console.error('[DUELISTA] ERROR: Phaser no está cargado!');
+  document.getElementById('status').innerHTML = '<span class="error">ERROR: Phaser no cargó</span>';
+}
 console.log('[DUELISTA] Iniciando Phaser.Game con configuración');
 const game = new Phaser.Game({
   type: Phaser.AUTO,
