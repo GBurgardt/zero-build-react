@@ -18,9 +18,15 @@ const State = {
 };
 
 class DuelScene extends Phaser.Scene {
-  constructor() { super('duel'); }
-  preload() {}
+  constructor() { 
+    super('duel');
+    console.log('[DUELISTA] DuelScene constructor iniciado');
+  }
+  preload() {
+    console.log('[DUELISTA] preload iniciado');
+  }
   create() {
+    console.log('[DUELISTA] create iniciado, configurando mundo y sprites');
     this.add.rectangle(GAME_W/2, GAME_H/2, GAME_W, GAME_H, 0x0b0b0c).setOrigin(0.5);
     this.add.rectangle(GAME_W/2, 420, GAME_W, 4, 0x2c2c2e);
 
@@ -66,7 +72,9 @@ class DuelScene extends Phaser.Scene {
 
     // Status DOM
     this.statusEl = document.getElementById('status');
+    console.log('[DUELISTA] statusEl encontrado:', this.statusEl);
     this.statusEl.innerHTML = '<span class="warn">IA:</span> a la espera…';
+    console.log('[DUELISTA] create completado, juego listo');
   }
   update(time, dt) {
     // Position visuals
@@ -194,6 +202,7 @@ class DuelScene extends Phaser.Scene {
   }
 
   async sendTick(time) {
+    console.log('[DUELISTA] sendTick iniciado, time:', time);
     this.inFlight = true;
     const t = Date.now();
     const payload = {
@@ -209,23 +218,31 @@ class DuelScene extends Phaser.Scene {
       events: this.eventsBuf.splice(0, this.eventsBuf.length)
     };
 
+    console.log('[DUELISTA] Payload a enviar:', JSON.stringify(payload));
     // Build small XML for the model (and send JSON to server that will construct XML too)
     try {
+      console.log('[DUELISTA] Iniciando fetch a /zero-api/duelista/act');
       const ctrl = new AbortController();
       const timeout = setTimeout(()=> ctrl.abort(), 300);
-      const resp = await fetch('/duelista/act', {
+      const resp = await fetch('/zero-api/duelista/act', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: ctrl.signal
       });
       clearTimeout(timeout);
+      console.log('[DUELISTA] Respuesta status:', resp.status);
       const data = await resp.json();
+      console.log('[DUELISTA] Data recibida:', data);
       const xml = String(data.xml || '').slice(0, 4000);
+      console.log('[DUELISTA] XML recibido:', xml);
       if (!xml) throw new Error('empty AI xml');
       this.statusEl.innerHTML = `<span class="ok">IA:</span> ${Phaser.Utils.String.Ellipsis((data.source||'').toUpperCase(), 16)} ok`;
       this.applyActionsXML(xml);
     } catch (e) {
+      console.log('[DUELISTA] Error en sendTick:', e);
+      console.log('[DUELISTA] Usando fallback local heurístico');
       this.statusEl.innerHTML = `<span class=\"warn\">IA:</span> fallback local`;
       // Local heuristic when server is unavailable
       const xml = localHeuristicXML(payload);
+      console.log('[DUELISTA] XML fallback generado:', xml);
       this.applyActionsXML(xml);
     } finally {
       this.inFlight = false;
@@ -233,8 +250,10 @@ class DuelScene extends Phaser.Scene {
   }
 
   applyActionsXML(xml) {
+    console.log('[DUELISTA] applyActionsXML recibido:', xml);
     try {
       const dom = new DOMParser().parseFromString(xml, 'application/xml');
+      console.log('[DUELISTA] DOM parseado:', dom);
       const why = dom.querySelector('why')?.textContent || '';
       if (why) this.whyText.setText(why);
       const npc = dom.querySelector('npc');
@@ -269,6 +288,7 @@ class DuelScene extends Phaser.Scene {
   }
 }
 
+console.log('[DUELISTA] Iniciando Phaser.Game con configuración');
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   width: GAME_W,
@@ -280,6 +300,7 @@ const game = new Phaser.Game({
 });
 
 function localHeuristicXML(payload) {
+  console.log('[DUELISTA] localHeuristicXML llamado con payload:', payload);
   try {
     const t = payload?.t || Date.now();
     const p = payload?.player || {}; const b = payload?.boss || {};

@@ -1040,38 +1040,54 @@ server.listen(PORT, () => {
 
 // ================= Duelista AI Proxy =================
 async function handleDuelistaAct(req, res) {
+  console.log('[DUELISTA-SERVER] handleDuelistaAct llamado');
+  console.log('[DUELISTA-SERVER] Headers:', req.headers);
   try {
     const chunks = [];
     for await (const c of req) chunks.push(c);
     const bodyStr = Buffer.concat(chunks).toString('utf8');
+    console.log('[DUELISTA-SERVER] Body recibido:', bodyStr.slice(0, 500));
     // The client may send XML or JSON. Accept both for simplicity.
     let payload = null;
     try { payload = JSON.parse(bodyStr || '{}'); } catch { payload = { xml: bodyStr }; }
+    console.log('[DUELISTA-SERVER] Payload parseado:', JSON.stringify(payload).slice(0, 300));
 
     const model = 'qwen-3-coder-480b';
     const apiKey = process.env.CEREBRAS_API_KEY;
+    console.log('[DUELISTA-SERVER] API Key presente:', !!apiKey);
+    console.log('[DUELISTA-SERVER] Model:', model);
 
     // If no key present, return a simple heuristic XML so the demo works offline
     if (!apiKey) {
+      console.log('[DUELISTA-SERVER] NO HAY API KEY, usando heurístico');
       const heuristic = duelistaHeuristicActions(payload);
+      console.log('[DUELISTA-SERVER] Heurístico generado:', heuristic);
       return json(res, 200, heuristic);
     }
 
     // Try dynamic import so the server doesn't crash if the SDK is not installed
     let Cerebras = null;
     try {
+      console.log('[DUELISTA-SERVER] Intentando importar Cerebras SDK...');
       ({ default: Cerebras } = await import('@cerebras/cerebras_cloud_sdk'));
+      console.log('[DUELISTA-SERVER] Cerebras SDK importado con éxito');
     } catch (e) {
-      console.warn('[duelista] Cerebras SDK not installed, using heuristic fallback:', e?.message || e);
+      console.log('[DUELISTA-SERVER] ERROR: Cerebras SDK no instalado:', e?.message || e);
+      console.log('[DUELISTA-SERVER] Usando fallback heurístico por falta de SDK');
       const heuristic = duelistaHeuristicActions(payload);
+      console.log('[DUELISTA-SERVER] Heurístico generado:', heuristic);
       return json(res, 200, heuristic);
     }
 
     const cerebras = new Cerebras({ apiKey });
+    console.log('[DUELISTA-SERVER] Cliente Cerebras creado');
     const system = buildDuelistaSystemPrompt();
     const user = buildDuelistaUserPrompt(payload);
+    console.log('[DUELISTA-SERVER] System prompt length:', system.length);
+    console.log('[DUELISTA-SERVER] User prompt:', user.slice(0, 300));
 
     try {
+      console.log('[DUELISTA-SERVER] Enviando request a Cerebras...');
       const resp = await cerebras.chat.completions.create({
         model,
         stream: false,
@@ -1083,16 +1099,24 @@ async function handleDuelistaAct(req, res) {
         top_p: 0.9,
         max_completion_tokens: 512,
       });
+      console.log('[DUELISTA-SERVER] Respuesta Cerebras recibida');
       const text = resp?.choices?.[0]?.message?.content || '';
+      console.log('[DUELISTA-SERVER] Texto de respuesta:', text.slice(0, 400));
       const xml = extractXml(text) || text;
+      console.log('[DUELISTA-SERVER] XML extraído:', xml);
       return json(res, 200, { xml, source: 'cerebras' });
     } catch (e) {
       // Graceful 429 / errors
-      console.warn('[duelista] Cerebras error, using heuristic fallback:', e?.message || e);
+      console.log('[DUELISTA-SERVER] ERROR Cerebras:', e?.message || e);
+      console.log('[DUELISTA-SERVER] Stack:', e?.stack);
+      console.log('[DUELISTA-SERVER] Usando fallback heurístico por error Cerebras');
       const heuristic = duelistaHeuristicActions(payload);
+      console.log('[DUELISTA-SERVER] Heurístico generado:', heuristic);
       return json(res, 200, heuristic);
     }
   } catch (e) {
+    console.log('[DUELISTA-SERVER] ERROR GENERAL:', e?.message || e);
+    console.log('[DUELISTA-SERVER] Stack:', e?.stack);
     return json(res, 500, { error: 'server_error', detail: String(e?.message || e) });
   }
 }
@@ -1146,12 +1170,14 @@ function extractXml(text) {
 }
 
 function duelistaHeuristicActions(payload) {
+  console.log('[DUELISTA-HEURISTIC] Llamado con payload:', JSON.stringify(payload).slice(0, 300));
   // Simple, fast, token-free: maintain preferred distance and parry heavy windups
   try {
     const t = payload?.t || Date.now();
     const p = payload?.player || {};
     const b = payload?.boss || {};
     const events = Array.isArray(payload?.events) ? payload.events : [];
+    console.log('[DUELISTA-HEURISTIC] Player pos:', p.x, 'Boss pos:', b.x, 'Events:', events.length);
     const dx = (p.x ?? 0) - (b.x ?? 0);
     const absdx = Math.abs(dx);
     const prefer = 120; // preferred spacing in pixels
@@ -1173,8 +1199,10 @@ function duelistaHeuristicActions(payload) {
       `  </npc>`,
       `</actions>`
     ].filter(Boolean).join('\n');
+    console.log('[DUELISTA-HEURISTIC] XML generado:', xml);
     return { xml, source: 'heuristic' };
   } catch (e) {
+    console.log('[DUELISTA-HEURISTIC] Error:', e);
     return { xml: `<actions t="${Date.now()}"><npc id="boss"><microStep dx="0.0" dy="0.0" durMs="80"/><why>fallback</why></npc></actions>`, source: 'heuristic' };
   }
 }
