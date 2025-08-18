@@ -121,9 +121,12 @@ Todo lo del kiosco ignorado, porque fui a comprar huevo con dos kioscos distinto
           { role: 'user', content: prompt }
         ], temperature: 0.2 })
       });
-      const data = await resp.json();
+      const txt = await resp.text();
+      try { console.log('[mornings][raw-response]', txt.slice(0, 4000)); } catch(_) {}
+      let data; try { data = JSON.parse(txt); } catch { throw new Error('Respuesta no JSON del servidor'); }
       if (!resp.ok || !data.text) throw new Error(data.detail || data.error || 'LLM error');
       const xml = data.text.trim();
+      try { console.log('[mornings][xml]', xml.slice(0, 4000)); } catch(_) {}
       const doc = parseXMLSafe(xml);
       const dayObj = extractDayFromXML(doc);
       setDaysMap((m) => ({ ...m, [dayObj.date]: dayObj }));
