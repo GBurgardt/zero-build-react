@@ -60,7 +60,10 @@ class EchoArena extends Phaser.Scene {
       reloadTimer: 0,
       lastShot: 0,
       onGround: false,
-      facing: 'right'
+      facing: 'right',
+      aimX: 1,  // -1 left, 0 center, 1 right
+      aimY: 0,  // -1 up, 0 center, 1 down
+      shootCooldown: false
     };
     
     // Echo (IA)
@@ -101,9 +104,9 @@ class EchoArena extends Phaser.Scene {
     this.physics.add.overlap(this.playerBullets, this.echo, this.bulletHitEcho, null, this);
     this.physics.add.overlap(this.echoBullets, this.player, this.bulletHitPlayer, null, this);
     
-    // Input
-    this.cursors = this.input.keyboard.addKeys('W,A,S,D,R,SPACE');
-    this.input.on('pointerdown', this.playerShoot, this);
+    // Input - Solo teclado!
+    this.cursors = this.input.keyboard.addKeys('W,A,S,D,R,SPACE,UP,DOWN,LEFT,RIGHT,J,K');
+    // Quitamos el mouse completamente
     
     // IA tick timer
     this.lastAITick = 0;
@@ -113,10 +116,15 @@ class EchoArena extends Phaser.Scene {
     this.narrationElement = document.getElementById('narration');
     this.updateUI();
     
+    // Aim indicator visual
+    this.aimIndicator = this.add.line(0, 0, 0, 0, 20, 0, 0x0a84ff, 0.5);
+    this.aimIndicator.setLineWidth(2);
+    
     console.log('[ECHO] Arena PLATFORMER ready!');
     console.log('[ECHO] Gravity:', GRAVITY);
     console.log('[ECHO] Jump velocity:', JUMP_VELOCITY);
-    this.showNarration("Welcome to the vertical arena...");
+    console.log('[ECHO] Controls: WASD move, Arrows aim, J/K shoot!');
+    this.showNarration("Aim with arrows, shoot with J/K!");
   }
 
   update(time, delta) {
@@ -140,11 +148,12 @@ class EchoArena extends Phaser.Scene {
     this.echoGraphics.x = this.echo.x;
     this.echoGraphics.y = this.echo.y;
     
-    // Face direction based on movement
-    if (this.player.body.velocity.x > 0) this.playerState.facing = 'right';
-    if (this.player.body.velocity.x < 0) this.playerState.facing = 'left';
+    // Face direction for Echo only (player facing is handled in movement)
     if (this.echo.body.velocity.x > 0) this.echoState.facing = 'right';
     if (this.echo.body.velocity.x < 0) this.echoState.facing = 'left';
+    
+    // Visual indicator for aim direction (optional)
+    this.updateAimIndicator();
     
     // Limpiar balas fuera de pantalla
     this.playerBullets.children.entries.forEach(bullet => {
@@ -166,11 +175,39 @@ class EchoArena extends Phaser.Scene {
     // Movimiento horizontal
     if (this.cursors.A.isDown) {
       vx = -PLAYER_SPEED;
+      this.playerState.facing = 'left';
+      this.playerState.aimX = -1;
+      if (!this.cursors.UP.isDown && !this.cursors.DOWN.isDown) {
+        this.playerState.aimY = 0; // Reset to horizontal when moving
+      }
       PlayerPatterns.movement_rhythm.push({ time: Date.now(), dir: 'left' });
     }
     if (this.cursors.D.isDown) {
       vx = PLAYER_SPEED;
+      this.playerState.facing = 'right';
+      this.playerState.aimX = 1;
+      if (!this.cursors.UP.isDown && !this.cursors.DOWN.isDown) {
+        this.playerState.aimY = 0; // Reset to horizontal when moving
+      }
       PlayerPatterns.movement_rhythm.push({ time: Date.now(), dir: 'right' });
+    }
+    
+    // Apuntado estilo Contra con flechas
+    if (this.cursors.UP.isDown) {
+      this.playerState.aimY = -1;
+      if (!this.cursors.A.isDown && !this.cursors.D.isDown) {
+        this.playerState.aimX = 0; // Straight up
+      }
+      console.log('[ECHO] Aiming UP');
+    } else if (this.cursors.DOWN.isDown && !this.playerState.onGround) {
+      this.playerState.aimY = 1;
+      if (!this.cursors.A.isDown && !this.cursors.D.isDown) {
+        this.playerState.aimX = 0; // Straight down
+      }
+      console.log('[ECHO] Aiming DOWN');
+    } else if (!this.cursors.A.isDown && !this.cursors.D.isDown) {
+      // Not moving horizontally and not pressing up/down
+      this.playerState.aimY = 0;
     }
     
     this.player.setVelocityX(vx);
@@ -181,6 +218,11 @@ class EchoArena extends Phaser.Scene {
       this.player.setVelocityY(JUMP_VELOCITY);
       PlayerPatterns.jump_spots.push({ x: this.player.x, y: this.player.y, time: Date.now() });
       PlayerPatterns.preferred_height.push(this.player.y);
+    }
+    
+    // Disparar con J o K
+    if ((Phaser.Input.Keyboard.JustDown(this.cursors.J) || Phaser.Input.Keyboard.JustDown(this.cursors.K)) && !this.playerState.shootCooldown) {
+      this.playerShootKeyboard();
     }
   }
 
@@ -200,15 +242,42 @@ class EchoArena extends Phaser.Scene {
     }
   }
 
-  playerShoot(pointer) {
+  playerShootKeyboard() {
     if (this.playerState.ammo <= 0 || this.playerState.reloading) {
       console.log('[ECHO] Cannot shoot - Ammo:', this.playerState.ammo, 'Reloading:', this.playerState.reloading);
       return;
     }
     
-    const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, pointer.x, pointer.y);
-    console.log('[ECHO] Player shooting at angle:', angle, 'from position:', this.player.x, this.player.y);
+    // Calcular ángulo basado en dirección de apuntado (estilo Contra)
+    let angle;
+    const { aimX, aimY } = this.playerState;
+    
+    if (aimX === 0 && aimY === -1) {
+      angle = -Math.PI / 2; // Straight up
+    } else if (aimX === 0 && aimY === 1) {
+      angle = Math.PI / 2; // Straight down
+    } else if (aimX === 1 && aimY === -1) {
+      angle = -Math.PI / 4; // Up-right diagonal
+    } else if (aimX === 1 && aimY === 1) {
+      angle = Math.PI / 4; // Down-right diagonal
+    } else if (aimX === -1 && aimY === -1) {
+      angle = -3 * Math.PI / 4; // Up-left diagonal
+    } else if (aimX === -1 && aimY === 1) {
+      angle = 3 * Math.PI / 4; // Down-left diagonal
+    } else if (aimX === -1 && aimY === 0) {
+      angle = Math.PI; // Left
+    } else {
+      angle = 0; // Right (default)
+    }
+    
+    console.log('[ECHO] Player shooting - Direction:', aimX, aimY, 'Angle:', angle);
     this.createBullet(this.player.x, this.player.y, angle, 'player');
+    
+    // Cooldown para evitar spam
+    this.playerState.shootCooldown = true;
+    setTimeout(() => {
+      this.playerState.shootCooldown = false;
+    }, 100);
     
     this.playerState.ammo--;
     this.playerState.lastShot = Date.now();
@@ -251,8 +320,8 @@ class EchoArena extends Phaser.Scene {
     const bullet = this.add.circle(x, y, 3, owner === 'player' ? 0x0a84ff : 0xff453a);
     this.physics.add.existing(bullet);
     
-    // Las balas tienen algo de gravedad pero menos que los personajes
-    bullet.body.setGravityY(100);
+    // Sin gravedad para las balas! Como en Contra
+    bullet.body.setGravityY(0);
     
     const vx = Math.cos(angle) * BULLET_SPEED;
     const vy = Math.sin(angle) * BULLET_SPEED;
@@ -543,6 +612,17 @@ class EchoArena extends Phaser.Scene {
     document.getElementById('echo-hp').textContent = Math.max(0, this.echoState.hp);
   }
 
+  updateAimIndicator() {
+    // Show where player is aiming
+    const { aimX, aimY } = this.playerState;
+    const startX = this.player.x;
+    const startY = this.player.y - 10;
+    const endX = startX + (aimX * 30);
+    const endY = startY + (aimY * 30);
+    
+    this.aimIndicator.setTo(startX, startY, endX, endY);
+  }
+  
   gameOver(playerWon) {
     console.log('[ECHO] !!!!! GAME OVER !!!!!');
     console.log('[ECHO] Player won:', playerWon);
