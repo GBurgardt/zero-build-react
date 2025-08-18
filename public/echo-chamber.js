@@ -278,6 +278,7 @@ class EchoArena extends Phaser.Scene {
     }
     
     console.log('[ECHO] Player shooting - Direction:', aimX, aimY, 'Angle:', angle);
+    // Pasar la posición del jugador al createBullet (ya tiene el offset interno)
     this.createBullet(this.player.x, this.player.y, angle, 'player');
     
     // Cooldown para evitar spam
@@ -322,9 +323,15 @@ class EchoArena extends Phaser.Scene {
   }
 
   createBullet(x, y, angle, owner) {
-    console.log('[ECHO] Creating bullet - Owner:', owner, 'Position:', x, y, 'Angle:', angle);
+    // Ajustar posición inicial de la bala para evitar colisión inmediata
+    // Crear la bala un poco adelante en la dirección de disparo
+    const offsetDistance = 20; // Distancia desde el centro del personaje
+    const bulletX = x + Math.cos(angle) * offsetDistance;
+    const bulletY = y - 16 + Math.sin(angle) * offsetDistance; // -16 para subirla al centro del personaje
     
-    const bullet = this.add.circle(x, y, 4, owner === 'player' ? 0x0a84ff : 0xff453a);
+    console.log('[ECHO] Creating bullet - Owner:', owner, 'Position:', bulletX, bulletY, 'Angle:', angle);
+    
+    const bullet = this.add.circle(bulletX, bulletY, 4, owner === 'player' ? 0x0a84ff : 0xff453a);
     this.physics.add.existing(bullet);
     
     // Configurar física de la bala correctamente
