@@ -1,28 +1,28 @@
-// ECHO CHAMBER - Arena Shooter 2D con IA Psicológica
-console.log('[ECHO] echo-chamber.js iniciado');
+// ECHO CHAMBER - Platformer 2D con IA Psicológica
+console.log('[ECHO] echo-chamber.js iniciado - VERSION PLATFORMER CON GRAVEDAD');
 
 const GAME_WIDTH = 800;
 const GAME_HEIGHT = 600;
-const PLAYER_SPEED = 200;
-const BULLET_SPEED = 600;
-const DASH_SPEED = 500;
-const DASH_DURATION = 200;
+const GRAVITY = 800;
+const PLAYER_SPEED = 250;
+const JUMP_VELOCITY = -400;
+const BULLET_SPEED = 400;
 const MAX_AMMO = 12;
 const RELOAD_TIME = 2000;
 
 // Estado global para patrones
 const PlayerPatterns = {
   reload_at: [],
-  movement_tendency: { left: 0, right: 0, up: 0, down: 0 },
-  cover_usage: {},
+  jump_spots: [],
+  preferred_height: [],
   shot_timing: [],
-  dash_usage: []
+  movement_rhythm: []
 };
 
 class EchoArena extends Phaser.Scene {
   constructor() {
     super({ key: 'arena' });
-    console.log('[ECHO] EchoArena constructor');
+    console.log('[ECHO] EchoArena constructor - PLATFORMER MODE');
   }
 
   preload() {
@@ -30,29 +30,27 @@ class EchoArena extends Phaser.Scene {
   }
 
   create() {
-    console.log('[ECHO] Creating arena...');
+    console.log('[ECHO] ==========================================');
+    console.log('[ECHO] Creating PLATFORMER arena with GRAVITY');
+    console.log('[ECHO] ==========================================');
     
-    // Fondo y bordes
+    // Física con gravedad
+    this.physics.world.gravity.y = GRAVITY;
+    
+    // Fondo
     this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT/2, GAME_WIDTH, GAME_HEIGHT, 0x0a0a0c);
     
-    // Grid sutil para referencia visual
-    for (let x = 0; x < GAME_WIDTH; x += 50) {
-      this.add.line(0, 0, x, 0, x, GAME_HEIGHT, 0x1c1c1e, 0.3);
-    }
-    for (let y = 0; y < GAME_HEIGHT; y += 50) {
-      this.add.line(0, 0, 0, y, GAME_WIDTH, y, 0x1c1c1e, 0.3);
-    }
-    
-    // Coberturas destructibles
-    this.covers = this.physics.add.staticGroup();
-    this.createCovers();
+    // Plataformas
+    this.platforms = this.physics.add.staticGroup();
+    this.createPlatforms();
     
     // Jugador
-    this.player = this.physics.add.sprite(200, 300, null);
-    this.player.setSize(24, 24);
-    this.player.setDisplaySize(24, 24);
-    this.playerGraphics = this.add.circle(0, 0, 12, 0x0a84ff);
-    this.playerAimLine = this.add.line(0, 0, 0, 0, 50, 0, 0x0a84ff, 0.5);
+    this.player = this.physics.add.sprite(100, 400, null);
+    this.player.setSize(24, 32);
+    this.player.setDisplaySize(24, 32);
+    this.player.setBounce(0.1);
+    this.player.setCollideWorldBounds(true);
+    this.playerGraphics = this.add.rectangle(0, 0, 24, 32, 0x0a84ff);
     
     // Estado del jugador
     this.playerState = {
@@ -60,17 +58,18 @@ class EchoArena extends Phaser.Scene {
       ammo: MAX_AMMO,
       reloading: false,
       reloadTimer: 0,
-      dashCooldown: 0,
-      isDashing: false,
-      lastShot: 0
+      lastShot: 0,
+      onGround: false,
+      facing: 'right'
     };
     
     // Echo (IA)
-    this.echo = this.physics.add.sprite(600, 300, null);
-    this.echo.setSize(24, 24);
-    this.echo.setDisplaySize(24, 24);
-    this.echoGraphics = this.add.circle(0, 0, 12, 0xff453a);
-    this.echoAimLine = this.add.line(0, 0, 0, 0, 50, 0, 0xff453a, 0.5);
+    this.echo = this.physics.add.sprite(700, 400, null);
+    this.echo.setSize(24, 32);
+    this.echo.setDisplaySize(24, 32);
+    this.echo.setBounce(0.1);
+    this.echo.setCollideWorldBounds(true);
+    this.echoGraphics = this.add.rectangle(0, 0, 24, 32, 0xff453a);
     
     // Estado del Echo
     this.echoState = {
@@ -81,7 +80,9 @@ class EchoArena extends Phaser.Scene {
       lastThought: 0,
       confidence: 0.5,
       aggression: 0.5,
-      currentPlan: null
+      currentPlan: null,
+      onGround: false,
+      facing: 'left'
     };
     
     // Grupos de balas
@@ -89,15 +90,19 @@ class EchoArena extends Phaser.Scene {
     this.echoBullets = this.physics.add.group();
     
     // Colisiones
-    this.physics.add.collider(this.player, this.covers);
-    this.physics.add.collider(this.echo, this.covers);
-    this.physics.add.collider(this.playerBullets, this.covers, this.bulletHitCover, null, this);
-    this.physics.add.collider(this.echoBullets, this.covers, this.bulletHitCover, null, this);
+    this.physics.add.collider(this.player, this.platforms, () => {
+      this.playerState.onGround = true;
+    });
+    this.physics.add.collider(this.echo, this.platforms, () => {
+      this.echoState.onGround = true;
+    });
+    this.physics.add.collider(this.playerBullets, this.platforms, this.bulletHitWall, null, this);
+    this.physics.add.collider(this.echoBullets, this.platforms, this.bulletHitWall, null, this);
     this.physics.add.overlap(this.playerBullets, this.echo, this.bulletHitEcho, null, this);
     this.physics.add.overlap(this.echoBullets, this.player, this.bulletHitPlayer, null, this);
     
     // Input
-    this.cursors = this.input.keyboard.addKeys('W,A,S,D,R,SHIFT');
+    this.cursors = this.input.keyboard.addKeys('W,A,S,D,R,SPACE');
     this.input.on('pointerdown', this.playerShoot, this);
     
     // IA tick timer
@@ -108,11 +113,17 @@ class EchoArena extends Phaser.Scene {
     this.narrationElement = document.getElementById('narration');
     this.updateUI();
     
-    console.log('[ECHO] Arena ready. The Echo awakens...');
-    this.showNarration("Let's see what you've got...", 'confident');
+    console.log('[ECHO] Arena PLATFORMER ready!');
+    console.log('[ECHO] Gravity:', GRAVITY);
+    console.log('[ECHO] Jump velocity:', JUMP_VELOCITY);
+    this.showNarration("Welcome to the vertical arena...");
   }
 
   update(time, delta) {
+    // Check ground state
+    this.playerState.onGround = Math.abs(this.player.body.velocity.y) < 10;
+    this.echoState.onGround = Math.abs(this.echo.body.velocity.y) < 10;
+    
     // Update jugador
     this.handlePlayerMovement(delta);
     this.updatePlayerReload(delta);
@@ -129,27 +140,16 @@ class EchoArena extends Phaser.Scene {
     this.echoGraphics.x = this.echo.x;
     this.echoGraphics.y = this.echo.y;
     
-    // Update líneas de apuntado
-    const mouseX = this.input.activePointer.x;
-    const mouseY = this.input.activePointer.y;
-    const playerAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, mouseX, mouseY);
-    this.playerAimLine.setTo(
-      this.player.x, this.player.y,
-      this.player.x + Math.cos(playerAngle) * 50,
-      this.player.y + Math.sin(playerAngle) * 50
-    );
-    
-    // Echo apunta al jugador (por ahora)
-    const echoAngle = Phaser.Math.Angle.Between(this.echo.x, this.echo.y, this.player.x, this.player.y);
-    this.echoAimLine.setTo(
-      this.echo.x, this.echo.y,
-      this.echo.x + Math.cos(echoAngle) * 50,
-      this.echo.y + Math.sin(echoAngle) * 50
-    );
+    // Face direction based on movement
+    if (this.player.body.velocity.x > 0) this.playerState.facing = 'right';
+    if (this.player.body.velocity.x < 0) this.playerState.facing = 'left';
+    if (this.echo.body.velocity.x > 0) this.echoState.facing = 'right';
+    if (this.echo.body.velocity.x < 0) this.echoState.facing = 'left';
     
     // Limpiar balas fuera de pantalla
     this.playerBullets.children.entries.forEach(bullet => {
       if (bullet.x < 0 || bullet.x > GAME_WIDTH || bullet.y < 0 || bullet.y > GAME_HEIGHT) {
+        console.log('[ECHO] Bullet destroyed (out of bounds)');
         bullet.destroy();
       }
     });
@@ -161,48 +161,26 @@ class EchoArena extends Phaser.Scene {
   }
 
   handlePlayerMovement(delta) {
-    let vx = 0, vy = 0;
+    let vx = 0;
     
+    // Movimiento horizontal
     if (this.cursors.A.isDown) {
-      vx -= PLAYER_SPEED;
-      PlayerPatterns.movement_tendency.left++;
+      vx = -PLAYER_SPEED;
+      PlayerPatterns.movement_rhythm.push({ time: Date.now(), dir: 'left' });
     }
     if (this.cursors.D.isDown) {
-      vx += PLAYER_SPEED;
-      PlayerPatterns.movement_tendency.right++;
-    }
-    if (this.cursors.W.isDown) {
-      vy -= PLAYER_SPEED;
-      PlayerPatterns.movement_tendency.up++;
-    }
-    if (this.cursors.S.isDown) {
-      vy += PLAYER_SPEED;
-      PlayerPatterns.movement_tendency.down++;
+      vx = PLAYER_SPEED;
+      PlayerPatterns.movement_rhythm.push({ time: Date.now(), dir: 'right' });
     }
     
-    // Dash
-    if (this.cursors.SHIFT.isDown && this.playerState.dashCooldown <= 0 && !this.playerState.isDashing) {
-      this.playerState.isDashing = true;
-      this.playerState.dashCooldown = 3000;
-      const dashAngle = Math.atan2(vy, vx);
-      vx = Math.cos(dashAngle) * DASH_SPEED;
-      vy = Math.sin(dashAngle) * DASH_SPEED;
-      PlayerPatterns.dash_usage.push(Date.now());
-      
-      setTimeout(() => {
-        this.playerState.isDashing = false;
-      }, DASH_DURATION);
-    }
+    this.player.setVelocityX(vx);
     
-    if (!this.playerState.isDashing) {
-      this.player.setVelocity(vx, vy);
-    } else {
-      // Durante dash, mantener velocidad
-    }
-    
-    // Cooldown del dash
-    if (this.playerState.dashCooldown > 0) {
-      this.playerState.dashCooldown -= delta;
+    // Salto
+    if ((this.cursors.W.isDown || this.cursors.SPACE.isDown) && this.playerState.onGround) {
+      console.log('[ECHO] Player JUMP at position:', this.player.x, this.player.y);
+      this.player.setVelocityY(JUMP_VELOCITY);
+      PlayerPatterns.jump_spots.push({ x: this.player.x, y: this.player.y, time: Date.now() });
+      PlayerPatterns.preferred_height.push(this.player.y);
     }
   }
 
@@ -216,15 +194,20 @@ class EchoArena extends Phaser.Scene {
       if (this.playerState.reloadTimer <= 0) {
         this.playerState.reloading = false;
         this.playerState.ammo = MAX_AMMO;
+        console.log('[ECHO] Player reload complete. Ammo:', this.playerState.ammo);
         this.updateUI();
       }
     }
   }
 
   playerShoot(pointer) {
-    if (this.playerState.ammo <= 0 || this.playerState.reloading) return;
+    if (this.playerState.ammo <= 0 || this.playerState.reloading) {
+      console.log('[ECHO] Cannot shoot - Ammo:', this.playerState.ammo, 'Reloading:', this.playerState.reloading);
+      return;
+    }
     
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, pointer.x, pointer.y);
+    console.log('[ECHO] Player shooting at angle:', angle, 'from position:', this.player.x, this.player.y);
     this.createBullet(this.player.x, this.player.y, angle, 'player');
     
     this.playerState.ammo--;
@@ -233,12 +216,14 @@ class EchoArena extends Phaser.Scene {
     
     // Auto-reload si se queda sin balas
     if (this.playerState.ammo === 0) {
+      console.log('[ECHO] Auto-reload triggered (out of ammo)');
       this.startReload('player');
     }
     
     // Registrar patrón de recarga
     if (this.playerState.ammo <= 3) {
       PlayerPatterns.reload_at.push(this.playerState.ammo);
+      console.log('[ECHO] Pattern detected - Player reloads at:', this.playerState.ammo, 'bullets');
     }
     
     this.updateUI();
@@ -248,19 +233,26 @@ class EchoArena extends Phaser.Scene {
     if (who === 'player') {
       this.playerState.reloading = true;
       this.playerState.reloadTimer = RELOAD_TIME;
-      console.log('[ECHO] Player reloading...');
+      console.log('[ECHO] Player started reloading. Will take', RELOAD_TIME, 'ms');
     } else {
       this.echoState.reloading = true;
+      console.log('[ECHO] Echo started reloading');
       setTimeout(() => {
         this.echoState.reloading = false;
         this.echoState.ammo = MAX_AMMO;
+        console.log('[ECHO] Echo reload complete');
       }, RELOAD_TIME);
     }
   }
 
   createBullet(x, y, angle, owner) {
+    console.log('[ECHO] Creating bullet - Owner:', owner, 'Position:', x, y, 'Angle:', angle);
+    
     const bullet = this.add.circle(x, y, 3, owner === 'player' ? 0x0a84ff : 0xff453a);
     this.physics.add.existing(bullet);
+    
+    // Las balas tienen algo de gravedad pero menos que los personajes
+    bullet.body.setGravityY(100);
     
     const vx = Math.cos(angle) * BULLET_SPEED;
     const vy = Math.sin(angle) * BULLET_SPEED;
@@ -273,41 +265,45 @@ class EchoArena extends Phaser.Scene {
     }
   }
 
-  createCovers() {
-    // Coberturas estratégicas en el mapa
-    const coverPositions = [
-      { x: 200, y: 150, w: 80, h: 20 },
-      { x: 600, y: 150, w: 80, h: 20 },
-      { x: 200, y: 450, w: 80, h: 20 },
-      { x: 600, y: 450, w: 80, h: 20 },
-      { x: 400, y: 300, w: 60, h: 60 }
+  createPlatforms() {
+    console.log('[ECHO] Creating platforms...');
+    
+    // Suelo
+    const ground = this.add.rectangle(400, 580, 800, 40, 0x2c2c2e);
+    this.physics.add.existing(ground, true);
+    this.platforms.add(ground);
+    
+    // Plataformas flotantes
+    const platformData = [
+      { x: 200, y: 450, w: 150, h: 20 },
+      { x: 600, y: 450, w: 150, h: 20 },
+      { x: 400, y: 350, w: 120, h: 20 },
+      { x: 150, y: 250, w: 100, h: 20 },
+      { x: 650, y: 250, w: 100, h: 20 },
+      { x: 400, y: 150, w: 80, h: 20 }
     ];
     
-    coverPositions.forEach((pos, i) => {
-      const cover = this.add.rectangle(pos.x, pos.y, pos.w, pos.h, 0x2c2c2e);
-      cover.hp = 3;
-      cover.id = `cover_${i}`;
-      this.physics.add.existing(cover, true);
-      this.covers.add(cover);
+    platformData.forEach(p => {
+      const platform = this.add.rectangle(p.x, p.y, p.w, p.h, 0x3c3c3e);
+      this.physics.add.existing(platform, true);
+      this.platforms.add(platform);
+      console.log('[ECHO] Platform created at:', p.x, p.y);
     });
   }
 
-  bulletHitCover(bullet, cover) {
+  bulletHitWall(bullet, wall) {
+    console.log('[ECHO] Bullet hit wall/platform');
     bullet.destroy();
-    cover.hp--;
-    if (cover.hp <= 0) {
-      cover.destroy();
-      console.log('[ECHO] Cover destroyed:', cover.id);
-    }
   }
 
   bulletHitPlayer(bullet, player) {
     bullet.destroy();
     this.playerState.hp -= 15;
+    console.log('[ECHO] !!!!! PLAYER HIT !!!!! HP now:', this.playerState.hp);
     this.updateUI();
-    console.log('[ECHO] Player hit! HP:', this.playerState.hp);
     
     if (this.playerState.hp <= 0) {
+      console.log('[ECHO] GAME OVER - Player died');
       this.gameOver(false);
     }
   }
@@ -315,10 +311,11 @@ class EchoArena extends Phaser.Scene {
   bulletHitEcho(bullet, echo) {
     bullet.destroy();
     this.echoState.hp -= 15;
+    console.log('[ECHO] !!!!! ECHO HIT !!!!! HP now:', this.echoState.hp);
     this.updateUI();
-    console.log('[ECHO] Echo hit! HP:', this.echoState.hp);
     
     if (this.echoState.hp <= 0) {
+      console.log('[ECHO] GAME OVER - Echo defeated!');
       this.gameOver(true);
     }
   }
@@ -327,10 +324,31 @@ class EchoArena extends Phaser.Scene {
     if (this.echoState.thinking) return;
     this.echoState.thinking = true;
     
+    console.log('[ECHO] ========== AI THINKING CYCLE START ==========');
+    console.log('[ECHO] Time:', time);
+    console.log('[ECHO] Echo state:', {
+      position: { x: this.echo.x, y: this.echo.y },
+      hp: this.echoState.hp,
+      ammo: this.echoState.ammo,
+      onGround: this.echoState.onGround,
+      reloading: this.echoState.reloading
+    });
+    console.log('[ECHO] Player state:', {
+      position: { x: this.player.x, y: this.player.y },
+      hp: this.playerState.hp,
+      ammo: this.playerState.ammo,
+      reloading: this.playerState.reloading
+    });
+    
     // Construir estado del juego para la IA
     const gameState = this.buildGameStateXML();
+    console.log('[ECHO] Game state XML built:');
+    console.log(gameState);
     
     try {
+      console.log('[ECHO] Calling AI endpoint /zero-api/echo/think...');
+      const startTime = Date.now();
+      
       // Llamar al endpoint de IA
       const response = await fetch('/zero-api/echo/think', {
         method: 'POST',
@@ -338,32 +356,49 @@ class EchoArena extends Phaser.Scene {
         body: JSON.stringify({ xml: gameState })
       });
       
-      if (!response.ok) throw new Error('IA response failed');
+      const responseTime = Date.now() - startTime;
+      console.log('[ECHO] AI Response received in', responseTime, 'ms');
+      console.log('[ECHO] Response status:', response.status);
+      
+      if (!response.ok) {
+        console.error('[ECHO] AI Response NOT OK:', response.status, response.statusText);
+        throw new Error('IA response failed');
+      }
       
       const data = await response.json();
+      console.log('[ECHO] AI Response data:', data);
+      console.log('[ECHO] AI Response XML:');
+      console.log(data.xml);
+      
       this.executeEchoActions(data.xml);
       
     } catch (error) {
-      console.log('[ECHO] IA fallback mode:', error);
-      // Comportamiento básico de fallback
+      console.error('[ECHO] !!!! AI ERROR !!!!:', error);
+      console.log('[ECHO] Falling back to basic AI');
       this.executeBasicAI();
     }
     
+    console.log('[ECHO] ========== AI THINKING CYCLE END ==========');
     this.echoState.thinking = false;
   }
 
   buildGameStateXML() {
     const patterns = this.analyzePatterns();
+    console.log('[ECHO] Analyzed patterns:', patterns);
     
     return `<game_state t="${Date.now()}" phase="combat">
   <player x="${Math.round(this.player.x)}" y="${Math.round(this.player.y)}" 
+          vx="${Math.round(this.player.body.velocity.x)}" vy="${Math.round(this.player.body.velocity.y)}"
           hp="${this.playerState.hp}" ammo="${this.playerState.ammo}" 
-          reloading="${this.playerState.reloading}" />
+          reloading="${this.playerState.reloading}" onGround="${this.playerState.onGround}" />
   <echo x="${Math.round(this.echo.x)}" y="${Math.round(this.echo.y)}" 
-        hp="${this.echoState.hp}" ammo="${this.echoState.ammo}" />
+        vx="${Math.round(this.echo.body.velocity.x)}" vy="${Math.round(this.echo.body.velocity.y)}"
+        hp="${this.echoState.hp}" ammo="${this.echoState.ammo}" 
+        onGround="${this.echoState.onGround}" />
   <patterns>
     <pattern type="reload_threshold" value="${patterns.reloadAt}" confidence="${patterns.reloadConfidence}" />
-    <pattern type="movement_bias" value="${patterns.movementBias}" />
+    <pattern type="jump_frequency" value="${patterns.jumpFreq}" />
+    <pattern type="preferred_height" value="${patterns.avgHeight}" />
   </patterns>
 </game_state>`;
   }
@@ -374,23 +409,26 @@ class EchoArena extends Phaser.Scene {
       ? Math.round(PlayerPatterns.reload_at.reduce((a,b) => a+b, 0) / PlayerPatterns.reload_at.length)
       : 3;
     
-    // Calcular sesgo de movimiento
-    const moves = PlayerPatterns.movement_tendency;
-    const totalMoves = moves.left + moves.right + moves.up + moves.down;
-    let movementBias = 'balanced';
-    if (totalMoves > 0) {
-      if (moves.left > totalMoves * 0.3) movementBias = 'left';
-      else if (moves.right > totalMoves * 0.3) movementBias = 'right';
-    }
+    // Frecuencia de saltos
+    const recentJumps = PlayerPatterns.jump_spots.filter(j => Date.now() - j.time < 10000);
+    const jumpFreq = recentJumps.length;
+    
+    // Altura preferida
+    const avgHeight = PlayerPatterns.preferred_height.length > 0
+      ? Math.round(PlayerPatterns.preferred_height.reduce((a,b) => a+b, 0) / PlayerPatterns.preferred_height.length)
+      : 400;
     
     return {
       reloadAt,
       reloadConfidence: Math.min(PlayerPatterns.reload_at.length / 5, 1),
-      movementBias
+      jumpFreq,
+      avgHeight
     };
   }
 
   executeEchoActions(xml) {
+    console.log('[ECHO] Executing Echo actions from XML...');
+    
     try {
       const parser = new DOMParser();
       const doc = parser.parseFromString(xml, 'text/xml');
@@ -400,46 +438,49 @@ class EchoArena extends Phaser.Scene {
       if (movement) {
         const targetX = parseInt(movement.getAttribute('x'));
         const targetY = parseInt(movement.getAttribute('y'));
-        const angle = Phaser.Math.Angle.Between(this.echo.x, this.echo.y, targetX, targetY);
-        const distance = Phaser.Math.Distance.Between(this.echo.x, this.echo.y, targetX, targetY);
-        const speed = Math.min(distance * 10, PLAYER_SPEED);
+        console.log('[ECHO] Echo moving to:', targetX, targetY);
         
-        this.echo.setVelocity(
-          Math.cos(angle) * speed,
-          Math.sin(angle) * speed
-        );
+        // Movimiento horizontal
+        const dx = targetX - this.echo.x;
+        if (Math.abs(dx) > 10) {
+          this.echo.setVelocityX(Math.sign(dx) * PLAYER_SPEED);
+        }
+        
+        // Salto si es necesario
+        const jump = movement.getAttribute('jump');
+        if (jump === 'true' && this.echoState.onGround) {
+          console.log('[ECHO] Echo JUMPING!');
+          this.echo.setVelocityY(JUMP_VELOCITY);
+        }
       }
       
       // Disparo
       const shoot = doc.querySelector('shoot');
       if (shoot && this.echoState.ammo > 0 && !this.echoState.reloading) {
         const atMs = parseInt(shoot.getAttribute('at_ms') || '0');
+        console.log('[ECHO] Echo will shoot in', atMs, 'ms');
+        
         setTimeout(() => {
           if (this.echoState.ammo > 0) {
             const angle = Phaser.Math.Angle.Between(this.echo.x, this.echo.y, this.player.x, this.player.y);
+            console.log('[ECHO] Echo SHOOTING at angle:', angle);
             this.createBullet(this.echo.x, this.echo.y, angle, 'echo');
             this.echoState.ammo--;
             
             if (this.echoState.ammo === 0) {
+              console.log('[ECHO] Echo out of ammo, auto-reloading');
               this.startReload('echo');
             }
           }
         }, atMs);
       }
       
-      // Narración
+      // Narración (sin audio)
       const narration = doc.querySelector('narration');
       if (narration) {
         const text = narration.textContent;
-        const tone = narration.getAttribute('tone') || 'neutral';
-        const timing = narration.getAttribute('timing') || 'immediate';
-        
-        if (timing === 'immediate') {
-          this.showNarration(text, tone);
-        } else {
-          const delay = parseInt(timing);
-          setTimeout(() => this.showNarration(text, tone), delay);
-        }
+        console.log('[ECHO] NARRATION:', text);
+        this.showNarration(text);
       }
       
     } catch (error) {
@@ -449,35 +490,30 @@ class EchoArena extends Phaser.Scene {
   }
 
   executeBasicAI() {
-    // IA básica de fallback
-    const angle = Phaser.Math.Angle.Between(this.echo.x, this.echo.y, this.player.x, this.player.y);
-    const distance = Phaser.Math.Distance.Between(this.echo.x, this.echo.y, this.player.x, this.player.y);
+    console.log('[ECHO] Executing BASIC AI fallback');
     
-    // Mantener distancia óptima
-    const optimalDistance = 200;
-    if (distance > optimalDistance + 50) {
-      // Acercarse
-      this.echo.setVelocity(
-        Math.cos(angle) * PLAYER_SPEED * 0.8,
-        Math.sin(angle) * PLAYER_SPEED * 0.8
-      );
-    } else if (distance < optimalDistance - 50) {
-      // Alejarse
-      this.echo.setVelocity(
-        -Math.cos(angle) * PLAYER_SPEED * 0.8,
-        -Math.sin(angle) * PLAYER_SPEED * 0.8
-      );
-    } else {
-      // Strafe
-      const strafeAngle = angle + Math.PI/2;
-      this.echo.setVelocity(
-        Math.cos(strafeAngle) * PLAYER_SPEED * 0.5,
-        Math.sin(strafeAngle) * PLAYER_SPEED * 0.5
-      );
+    const dx = this.player.x - this.echo.x;
+    const dy = this.player.y - this.echo.y;
+    const distance = Math.sqrt(dx*dx + dy*dy);
+    
+    console.log('[ECHO] Distance to player:', distance);
+    console.log('[ECHO] Delta X:', dx, 'Delta Y:', dy);
+    
+    // Movimiento horizontal hacia el jugador
+    if (Math.abs(dx) > 50) {
+      this.echo.setVelocityX(Math.sign(dx) * PLAYER_SPEED * 0.8);
+    }
+    
+    // Saltar si el jugador está arriba
+    if (dy < -50 && this.echoState.onGround) {
+      console.log('[ECHO] Basic AI: Jumping to reach player');
+      this.echo.setVelocityY(JUMP_VELOCITY);
     }
     
     // Disparar si tiene munición
-    if (this.echoState.ammo > 0 && !this.echoState.reloading && Math.random() < 0.3) {
+    if (this.echoState.ammo > 0 && !this.echoState.reloading && distance < 400 && Math.random() < 0.3) {
+      const angle = Math.atan2(dy, dx);
+      console.log('[ECHO] Basic AI: Shooting');
       this.createBullet(this.echo.x, this.echo.y, angle, 'echo');
       this.echoState.ammo--;
       
@@ -487,17 +523,13 @@ class EchoArena extends Phaser.Scene {
     }
   }
 
-  showNarration(text, tone = 'neutral') {
+  showNarration(text) {
+    console.log('[ECHO] SHOWING NARRATION:', text);
     this.narrationElement.textContent = text;
     this.narrationElement.classList.add('active');
     
-    // Text to speech si está disponible
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.2;
-      utterance.pitch = tone === 'confident' ? 0.9 : tone === 'desperate' ? 1.3 : 1.0;
-      speechSynthesis.speak(utterance);
-    }
+    // NO AUDIO - Solo subtítulos
+    // Quitamos speechSynthesis completamente
     
     clearTimeout(this.narrationTimeout);
     this.narrationTimeout = setTimeout(() => {
@@ -512,17 +544,20 @@ class EchoArena extends Phaser.Scene {
   }
 
   gameOver(playerWon) {
+    console.log('[ECHO] !!!!! GAME OVER !!!!!');
+    console.log('[ECHO] Player won:', playerWon);
     this.physics.pause();
     
     if (playerWon) {
-      this.showNarration("Impressive... but I learn from defeat.", 'defeated');
+      this.showNarration("Impressive... but I learn from defeat.");
+      console.log('[ECHO] Player victory!');
     } else {
-      this.showNarration("Too predictable. I knew every move.", 'triumphant');
-      // Echo aprende los patrones para la próxima ronda
-      console.log('[ECHO] Patterns absorbed:', PlayerPatterns);
+      this.showNarration("Too predictable. I knew every move.");
+      console.log('[ECHO] Echo victory! Patterns learned:', PlayerPatterns);
     }
     
     setTimeout(() => {
+      console.log('[ECHO] Restarting scene...');
       this.scene.restart();
     }, 5000);
   }
@@ -537,7 +572,7 @@ const config = {
   physics: {
     default: 'arcade',
     arcade: {
-      gravity: { y: 0 },
+      gravity: { y: 0 }, // Gravedad se aplica individualmente
       debug: false
     }
   },
@@ -545,5 +580,8 @@ const config = {
   backgroundColor: '#0a0a0c'
 };
 
-console.log('[ECHO] Iniciando Phaser con config:', config);
+console.log('[ECHO] ==========================================');
+console.log('[ECHO] Iniciando ECHO CHAMBER PLATFORMER');
+console.log('[ECHO] Config:', config);
+console.log('[ECHO] ==========================================');
 const game = new Phaser.Game(config);

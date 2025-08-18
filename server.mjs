@@ -1153,7 +1153,7 @@ async function handleEchoThink(req, res) {
 }
 
 function generateEchoResponse(payload) {
-  console.log('[ECHO-AI] Generando respuesta táctica');
+  console.log('[ECHO-AI] Generando respuesta táctica PLATFORMER');
   
   try {
     // Parsear el estado del juego
@@ -1163,9 +1163,12 @@ function generateEchoResponse(payload) {
       const attrs = stateMatch[0];
       playerData.x = parseInt(attrs.match(/x="(\d+)"/)?.[1] || 400);
       playerData.y = parseInt(attrs.match(/y="(\d+)"/)?.[1] || 300);
+      playerData.vx = parseInt(attrs.match(/vx="(-?\d+)"/)?.[1] || 0);
+      playerData.vy = parseInt(attrs.match(/vy="(-?\d+)"/)?.[1] || 0);
       playerData.hp = parseInt(attrs.match(/hp="(\d+)"/)?.[1] || 100);
       playerData.ammo = parseInt(attrs.match(/ammo="(\d+)"/)?.[1] || 12);
       playerData.reloading = attrs.includes('reloading="true"');
+      playerData.onGround = attrs.includes('onGround="true"');
     }
     
     const echoMatch = payload.xml?.match(/<echo[^>]+>/);
@@ -1174,75 +1177,109 @@ function generateEchoResponse(payload) {
       const attrs = echoMatch[0];
       echoData.x = parseInt(attrs.match(/x="(\d+)"/)?.[1] || 600);
       echoData.y = parseInt(attrs.match(/y="(\d+)"/)?.[1] || 300);
+      echoData.vx = parseInt(attrs.match(/vx="(-?\d+)"/)?.[1] || 0);
+      echoData.vy = parseInt(attrs.match(/vy="(-?\d+)"/)?.[1] || 0);
       echoData.hp = parseInt(attrs.match(/hp="(\d+)"/)?.[1] || 100);
       echoData.ammo = parseInt(attrs.match(/ammo="(\d+)"/)?.[1] || 12);
+      echoData.onGround = attrs.includes('onGround="true"');
     }
     
     // Analizar patrones
     const patternMatch = payload.xml?.match(/<pattern type="reload_threshold" value="(\d+)"/);
     const reloadThreshold = parseInt(patternMatch?.[1] || 3);
     
-    // Decisión táctica
-    const distance = Math.sqrt(Math.pow(playerData.x - echoData.x, 2) + Math.pow(playerData.y - echoData.y, 2));
-    const optimalDistance = 200;
+    // Analizar patrones de salto
+    const jumpPattern = payload.xml?.match(/<pattern type="jump_frequency" value="(\d+)"/);
+    const jumpFreq = parseInt(jumpPattern?.[1] || 0);
+    
+    // Decisión táctica PLATFORMER
+    const dx = playerData.x - echoData.x;
+    const dy = playerData.y - echoData.y;
+    const distance = Math.sqrt(dx*dx + dy*dy);
+    const optimalDistance = 250;
     
     let moveX = echoData.x;
     let moveY = echoData.y;
+    let shouldJump = false;
     let narration = "";
     let tone = "neutral";
     let shouldShoot = false;
     
+    console.log('[ECHO-AI] Distance:', distance, 'DX:', dx, 'DY:', dy);
+    console.log('[ECHO-AI] Player onGround:', playerData.onGround, 'Echo onGround:', echoData.onGround);
+    
     // Si el jugador está recargando, aprovechar
     if (playerData.reloading) {
-      narration = "Reloading? Big mistake...";
+      narration = "Reloading? Time to rush!";
       tone = "confident";
-      // Acercarse agresivamente
-      const angle = Math.atan2(playerData.y - echoData.y, playerData.x - echoData.x);
-      moveX = echoData.x + Math.cos(angle) * 50;
-      moveY = echoData.y + Math.sin(angle) * 50;
+      moveX = playerData.x; // Ir directo hacia él
+      moveY = playerData.y;
+      shouldShoot = true;
+      // Saltar si el jugador está arriba
+      if (dy < -30 && echoData.onGround) {
+        shouldJump = true;
+      }
+    }
+    // Si el jugador está en el aire, predecir aterrizaje
+    else if (!playerData.onGround && playerData.vy > 0) {
+      // Predecir dónde aterrizará
+      const landingX = playerData.x + playerData.vx * 0.5;
+      narration = "I know where you'll land";
+      tone = "predicting";
+      moveX = landingX;
+      moveY = playerData.y + 100;
       shouldShoot = true;
     }
     // Si el jugador tiene poca munición
     else if (playerData.ammo <= reloadThreshold && reloadThreshold > 0) {
-      narration = `${playerData.ammo} bullets left... you'll reload soon`;
+      narration = `${playerData.ammo} bullets... almost empty`;
       tone = "predicting";
-      // Preparar emboscada
-      shouldShoot = false; // Esperar el momento
+      // Mantener presión desde arriba
+      if (echoData.y > playerData.y && echoData.onGround) {
+        shouldJump = true;
+      }
+      shouldShoot = false;
     }
-    // Mantener distancia óptima
-    else if (distance > optimalDistance + 50) {
-      narration = "Running away? How predictable";
-      const angle = Math.atan2(playerData.y - echoData.y, playerData.x - echoData.x);
-      moveX = echoData.x + Math.cos(angle) * 40;
-      moveY = echoData.y + Math.sin(angle) * 40;
-      shouldShoot = distance < 300;
+    // Si el jugador está arriba, subir a su nivel
+    else if (dy < -100 && echoData.onGround) {
+      narration = "Can't hide up there";
+      moveX = playerData.x;
+      moveY = playerData.y;
+      shouldJump = true;
+      shouldShoot = false;
     }
-    else if (distance < optimalDistance - 50) {
-      narration = "Too close for comfort";
-      const angle = Math.atan2(playerData.y - echoData.y, playerData.x - echoData.x);
-      moveX = echoData.x - Math.cos(angle) * 40;
-      moveY = echoData.y - Math.sin(angle) * 40;
+    // Mantener distancia óptima horizontal
+    else if (Math.abs(dx) > optimalDistance) {
+      narration = "Getting closer...";
+      moveX = echoData.x + Math.sign(dx) * 50;
+      moveY = echoData.y;
+      shouldShoot = distance < 400;
+    }
+    // Si está muy cerca, alejarse
+    else if (Math.abs(dx) < 100) {
+      narration = "Too close!";
+      moveX = echoData.x - Math.sign(dx) * 50;
+      moveY = echoData.y;
       shouldShoot = true;
     }
     else {
-      // Strafe y disparar
-      narration = "Dance with me";
-      const strafeAngle = Math.atan2(playerData.y - echoData.y, playerData.x - echoData.x) + Math.PI/2;
-      moveX = echoData.x + Math.cos(strafeAngle) * 30;
-      moveY = echoData.y + Math.sin(strafeAngle) * 30;
-      shouldShoot = echoData.ammo > 6;
+      // Comportamiento por defecto
+      narration = jumpFreq > 3 ? "Stop jumping around" : "Show me what you got";
+      moveX = playerData.x;
+      moveY = playerData.y;
+      shouldShoot = echoData.ammo > 6 && distance < 350;
     }
     
     // Limitar movimiento dentro de la arena
     moveX = Math.max(50, Math.min(750, moveX));
-    moveY = Math.max(50, Math.min(550, moveY));
+    moveY = Math.max(100, Math.min(550, moveY));
     
     const xml = `<echo_actions t="${Date.now()}">
-  <movement x="${Math.round(moveX)}" y="${Math.round(moveY)}" speed="normal" reason="tactical"/>
+  <movement x="${Math.round(moveX)}" y="${Math.round(moveY)}" jump="${shouldJump}" speed="normal" reason="tactical"/>
   <aim_at x="${playerData.x}" y="${playerData.y}" lead_time="50"/>
   ${shouldShoot && echoData.ammo > 0 ? '<shoot at_ms="100" confidence="high"/>' : ''}
   <narration timing="immediate" tone="${tone}">${narration}</narration>
-  <next_plan horizon_ms="1000">${playerData.reloading ? 'rush' : 'maintain_distance'}</next_plan>
+  <next_plan horizon_ms="1000">${playerData.reloading ? 'rush' : dy < -100 ? 'climb' : 'maintain_distance'}</next_plan>
   <internal_state confidence="0.75" aggression="${playerData.reloading ? '0.9' : '0.6'}" tilt="0.1"/>
 </echo_actions>`;
     
