@@ -253,8 +253,11 @@ function renderTabContent(tab, day) {
 
 function buildPrompt(raw) {
   return (
-`You are a disciplined extractor. Return STRICT XML with this structure and order. No explanations.
+`You are a disciplined extractor. Return STRICT XML ONLY, no commentary, following this EXACT structure and order. The first tag MUST be an internal monologue of exactly 100 lines that reasons through the transcript to derive the sections.
 <day date="${todayStr()}">
+  <internal_monologue>
+  <!-- 100 lines, each non-empty, reflecting step-by-step reasoning about the user's transcript: what is their long-term vision, what is today's vision, core themes, what belongs to gratitude, what is intention vs task, what to ignore as noise. Do not reference being an AI. No XML tags inside except text. Exactly 100 lines. -->
+  </internal_monologue>
   <vision horizon="daily"></vision>
   <vision_title></vision_title>
   <gratitude>
@@ -276,18 +279,23 @@ function buildPrompt(raw) {
   <source></source>
 </day>
 Rules:
-- Tags in English exactly as above; include empty tags if missing.
-- Keep content in original language (Spanish input → Spanish content).
-- Gratitude and Intention as bullets (items). Max 10 items each. Do not invent tasks.
-- Extract horizon if present (e.g., "en dos años" → horizon="2y"). Else horizon="daily".
-- Ignore small talk/logistics/noise; keep only meaningful content.
+- Tags and order are mandatory as shown. Include empty tags if missing content.
+- Content language = user's original language (Spanish here).
+- Fill <vision> with a substantial, coherent paragraph (120–300 palabras) extracted and cleaned from the transcript; NEVER leave it empty. Capture both the drive (emprender/divulgar/IA/streaming) and modalities (tiempos, energía, foco). If longer-horizon is explicit (e.g., "en dos años"), set horizon accordingly (e.g., "2y").
+- <vision_title> = 60–80 caracteres, resumen claro del día.
+- <gratitude> and <intention> as itemized bullets. Max 10 each. Intention items normalized with verb attribute and optional timebox.
+- <tasks> only if explicit, operational; do not invent. Empty is allowed.
+- <medicine> short lyrical sentence if present.
+- <themes> up to 5 with strengths summing ~1.0.
+- <signals> include a rough vision_change score between 0 and 1 based on similarity vs the immediate past inferred from text.
+- Ignore small talk/logistics/noise (e.g., kiosco, charlas laterales) unless it clarifies sections.
 
-Input:
+Input transcript (raw):
 ${raw}`
   );
 }
 
-const systemPrompt = `You structure Morning Routine transcripts into strict XML for UI rendering. Do not add commentary. Always return valid XML.`;
+const systemPrompt = `You structure Morning Routine transcripts into strict XML for UI rendering. Do not add commentary. Always return valid XML. The first tag MUST be <internal_monologue> with exactly 100 non-empty lines. Never leave <vision> empty; write a substantive 120–300-word paragraph and a concise <vision_title>.`;
 
 function weekLabel(weekStart) {
   const end = addDays(weekStart, 6);
