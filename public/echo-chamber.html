@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ECHO CHAMBER · Arena psicológica</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { 
+      background: #000; 
+      color: #f5f5f7; 
+      margin: 0; 
+      font-family: -apple-system, system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    
+    #header {
+      width: 800px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .title {
+      font-size: 24px;
+      font-weight: bold;
+      letter-spacing: -0.5px;
+      color: #ff453a;
+    }
+    
+    .stats {
+      display: flex;
+      gap: 20px;
+      font-size: 14px;
+      font-family: monospace;
+    }
+    
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .hp { color: #34c759; }
+    .ammo { color: #0a84ff; }
+    .echo-hp { color: #ff453a; }
+    
+    #game-container {
+      width: 800px;
+      height: 600px;
+      border: 2px solid #1c1c1e;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      background: #0a0a0c;
+    }
+    
+    #narration {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.9);
+      border: 1px solid rgba(255,69,58,0.5);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-family: monospace;
+      font-size: 14px;
+      color: #ff453a;
+      max-width: 400px;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 100;
+    }
+    
+    #narration.active {
+      opacity: 1;
+    }
+    
+    #controls {
+      width: 800px;
+      margin-top: 10px;
+      padding: 10px;
+      background: #1c1c1e;
+      border-radius: 8px;
+      font-size: 12px;
+      text-align: center;
+      color: #8e8e93;
+    }
+    
+    .debug {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.8);
+      padding: 10px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #8e8e93;
+      max-width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <div class="title">ECHO CHAMBER</div>
+    <div class="stats">
+      <div class="stat hp">HP: <span id="player-hp">100</span></div>
+      <div class="stat ammo">AMMO: <span id="player-ammo">12</span>/12</div>
+      <div class="stat echo-hp">ECHO: <span id="echo-hp">100</span></div>
+    </div>
+  </div>
+  
+  <div id="game-container">
+    <div id="game"></div>
+    <div id="narration"></div>
+  </div>
+  
+  <div id="controls">
+    WASD: Move · Mouse: Aim · Click: Shoot · Shift: Dash · R: Reload
+  </div>
+  
+  <div class="debug" id="debug" style="display:none;">
+    <div>FPS: <span id="fps">60</span></div>
+    <div>Echo State: <span id="echo-state">thinking</span></div>
+    <div>Pattern: <span id="pattern">analyzing</span></div>
+  </div>
+
+  <script>
+    // Cargar Phaser primero
+    console.log('[ECHO] Cargando Phaser...');
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js';
+    script.onload = () => {
+      console.log('[ECHO] Phaser cargado, iniciando juego...');
+      const gameScript = document.createElement('script');
+      gameScript.type = 'module';
+      gameScript.src = '/zero/echo-chamber.js';
+      document.body.appendChild(gameScript);
+    };
+    script.onerror = () => {
+      console.error('[ECHO] Error cargando Phaser');
+      document.getElementById('narration').textContent = 'Error loading game engine';
+      document.getElementById('narration').classList.add('active');
+    };
+    document.head.appendChild(script);
+  </script>
+</body>
+</html>

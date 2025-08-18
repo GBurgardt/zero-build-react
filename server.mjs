@@ -983,6 +983,10 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && (url.pathname === '/duelista/act' || url.pathname === '/zero-api/duelista/act')) {
     return handleDuelistaAct(req, res);
   }
+  // Echo Chamber AI endpoint
+  if (req.method === 'POST' && (url.pathname === '/echo/think' || url.pathname === '/zero-api/echo/think')) {
+    return handleEchoThink(req, res);
+  }
   if (req.method === 'POST' && url.pathname === '/zero-api/chat') return handleChat(req, res);
   // Support both direct and nginx-rewritten paths
   if (req.method === 'POST' && (url.pathname === '/zero-api/ideas' || url.pathname === '/ideas')) return handleCreateIdea(req, res);
@@ -1118,6 +1122,142 @@ async function handleDuelistaAct(req, res) {
     console.log('[DUELISTA-SERVER] ERROR GENERAL:', e?.message || e);
     console.log('[DUELISTA-SERVER] Stack:', e?.stack);
     return json(res, 500, { error: 'server_error', detail: String(e?.message || e) });
+  }
+}
+
+// ================= ECHO CHAMBER AI =================
+async function handleEchoThink(req, res) {
+  console.log('[ECHO-SERVER] handleEchoThink llamado');
+  try {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const bodyStr = Buffer.concat(chunks).toString('utf8');
+    console.log('[ECHO-SERVER] Body recibido:', bodyStr.slice(0, 300));
+    
+    let payload = null;
+    try { 
+      payload = JSON.parse(bodyStr || '{}'); 
+    } catch { 
+      payload = { xml: bodyStr }; 
+    }
+    
+    // Por ahora usar heurística inteligente
+    const response = generateEchoResponse(payload);
+    console.log('[ECHO-SERVER] Respuesta generada:', response.xml.slice(0, 200));
+    return json(res, 200, response);
+    
+  } catch (e) {
+    console.log('[ECHO-SERVER] ERROR:', e);
+    return json(res, 500, { error: 'server_error', detail: String(e?.message || e) });
+  }
+}
+
+function generateEchoResponse(payload) {
+  console.log('[ECHO-AI] Generando respuesta táctica');
+  
+  try {
+    // Parsear el estado del juego
+    const stateMatch = payload.xml?.match(/<player[^>]+>/);
+    const playerData = {};
+    if (stateMatch) {
+      const attrs = stateMatch[0];
+      playerData.x = parseInt(attrs.match(/x="(\d+)"/)?.[1] || 400);
+      playerData.y = parseInt(attrs.match(/y="(\d+)"/)?.[1] || 300);
+      playerData.hp = parseInt(attrs.match(/hp="(\d+)"/)?.[1] || 100);
+      playerData.ammo = parseInt(attrs.match(/ammo="(\d+)"/)?.[1] || 12);
+      playerData.reloading = attrs.includes('reloading="true"');
+    }
+    
+    const echoMatch = payload.xml?.match(/<echo[^>]+>/);
+    const echoData = {};
+    if (echoMatch) {
+      const attrs = echoMatch[0];
+      echoData.x = parseInt(attrs.match(/x="(\d+)"/)?.[1] || 600);
+      echoData.y = parseInt(attrs.match(/y="(\d+)"/)?.[1] || 300);
+      echoData.hp = parseInt(attrs.match(/hp="(\d+)"/)?.[1] || 100);
+      echoData.ammo = parseInt(attrs.match(/ammo="(\d+)"/)?.[1] || 12);
+    }
+    
+    // Analizar patrones
+    const patternMatch = payload.xml?.match(/<pattern type="reload_threshold" value="(\d+)"/);
+    const reloadThreshold = parseInt(patternMatch?.[1] || 3);
+    
+    // Decisión táctica
+    const distance = Math.sqrt(Math.pow(playerData.x - echoData.x, 2) + Math.pow(playerData.y - echoData.y, 2));
+    const optimalDistance = 200;
+    
+    let moveX = echoData.x;
+    let moveY = echoData.y;
+    let narration = "";
+    let tone = "neutral";
+    let shouldShoot = false;
+    
+    // Si el jugador está recargando, aprovechar
+    if (playerData.reloading) {
+      narration = "Reloading? Big mistake...";
+      tone = "confident";
+      // Acercarse agresivamente
+      const angle = Math.atan2(playerData.y - echoData.y, playerData.x - echoData.x);
+      moveX = echoData.x + Math.cos(angle) * 50;
+      moveY = echoData.y + Math.sin(angle) * 50;
+      shouldShoot = true;
+    }
+    // Si el jugador tiene poca munición
+    else if (playerData.ammo <= reloadThreshold && reloadThreshold > 0) {
+      narration = `${playerData.ammo} bullets left... you'll reload soon`;
+      tone = "predicting";
+      // Preparar emboscada
+      shouldShoot = false; // Esperar el momento
+    }
+    // Mantener distancia óptima
+    else if (distance > optimalDistance + 50) {
+      narration = "Running away? How predictable";
+      const angle = Math.atan2(playerData.y - echoData.y, playerData.x - echoData.x);
+      moveX = echoData.x + Math.cos(angle) * 40;
+      moveY = echoData.y + Math.sin(angle) * 40;
+      shouldShoot = distance < 300;
+    }
+    else if (distance < optimalDistance - 50) {
+      narration = "Too close for comfort";
+      const angle = Math.atan2(playerData.y - echoData.y, playerData.x - echoData.x);
+      moveX = echoData.x - Math.cos(angle) * 40;
+      moveY = echoData.y - Math.sin(angle) * 40;
+      shouldShoot = true;
+    }
+    else {
+      // Strafe y disparar
+      narration = "Dance with me";
+      const strafeAngle = Math.atan2(playerData.y - echoData.y, playerData.x - echoData.x) + Math.PI/2;
+      moveX = echoData.x + Math.cos(strafeAngle) * 30;
+      moveY = echoData.y + Math.sin(strafeAngle) * 30;
+      shouldShoot = echoData.ammo > 6;
+    }
+    
+    // Limitar movimiento dentro de la arena
+    moveX = Math.max(50, Math.min(750, moveX));
+    moveY = Math.max(50, Math.min(550, moveY));
+    
+    const xml = `<echo_actions t="${Date.now()}">
+  <movement x="${Math.round(moveX)}" y="${Math.round(moveY)}" speed="normal" reason="tactical"/>
+  <aim_at x="${playerData.x}" y="${playerData.y}" lead_time="50"/>
+  ${shouldShoot && echoData.ammo > 0 ? '<shoot at_ms="100" confidence="high"/>' : ''}
+  <narration timing="immediate" tone="${tone}">${narration}</narration>
+  <next_plan horizon_ms="1000">${playerData.reloading ? 'rush' : 'maintain_distance'}</next_plan>
+  <internal_state confidence="0.75" aggression="${playerData.reloading ? '0.9' : '0.6'}" tilt="0.1"/>
+</echo_actions>`;
+    
+    return { xml, source: 'tactical_ai' };
+    
+  } catch (e) {
+    console.log('[ECHO-AI] Error generando respuesta:', e);
+    // Fallback simple
+    return {
+      xml: `<echo_actions t="${Date.now()}">
+  <movement x="400" y="300" speed="normal"/>
+  <narration timing="immediate">Systems recalibrating...</narration>
+</echo_actions>`,
+      source: 'fallback'
+    };
   }
 }
 
